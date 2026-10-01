@@ -61,7 +61,9 @@ const DISCORD_CLIENT_ID =
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
-        GatewayIntentBits.GuildMembers
+        GatewayIntentBits.GuildMembers,
+        GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.MessageContent
     ]
 });
 
@@ -929,10 +931,6 @@ const permissoes = {
         "General de Brigada"
     ],
 
-    // =================================================
-    // BAC
-    // =================================================
-
     "Comandante do BAC": [
         "Subcomandante do BAC",
         "Instrutor BAC",
@@ -955,10 +953,6 @@ const permissoes = {
         "Aluno BAC",
         "Aluno a Comandos BAC"
     ],
-
-    // =================================================
-    // BIP
-    // =================================================
 
     "Comandante da BIP": [
         "Subcomandante da BIP",
@@ -1004,10 +998,6 @@ const permissoes = {
         "Estagiário BIP",
         "Paraquedista BIP"
     ],
-
-    // =================================================
-    // CIE
-    // =================================================
 
     "Comandante do CIE": [
         "Subcomandante do CIE",
@@ -1142,10 +1132,6 @@ client.once(
                 );
             }
 
-            // =================================================
-            // VERIFICAR SERVIDOR
-            // =================================================
-
             const guild =
                 await client.guilds.fetch(
                     DISCORD_GUILD_ID
@@ -1161,10 +1147,6 @@ client.once(
             console.log(
                 `✅ Servidor encontrado: ${guild.name}`
             );
-
-            // =================================================
-            // REGISTRAR COMANDOS
-            // =================================================
 
             await rest.put(
 
@@ -1195,73 +1177,45 @@ client.once(
 );
 
 // =====================================================
-// NOVO MEMBRO
+// COMANDO !PAINELVERIFICAR
 // =====================================================
 
 client.on(
-    "guildMemberAdd",
-    async membro => {
+    "messageCreate",
+    async mensagem => {
 
         try {
 
-            // =================================================
-            // CARGO NÃO VERIFICADO
-            // =================================================
-
-            const cargoNaoVerificado =
-                membro.guild.roles.cache.find(
-                    role =>
-                        role.name ===
-                        NOME_CARGO_NAO_VERIFICADO
-                );
+            if (mensagem.author.bot) {
+                return;
+            }
 
             if (
-                cargoNaoVerificado &&
-                !membro.roles.cache.has(
-                    cargoNaoVerificado.id
-                )
+                !mensagem.guild
+            ) {
+                return;
+            }
+
+            if (
+                mensagem.content.toLowerCase() !==
+                "!painelverificar"
+            ) {
+                return;
+            }
+
+            // =================================================
+            // VERIFICAR PERMISSÃO
+            // =================================================
+
+            if (
+                !isCGEX({
+                    member: mensagem.member
+                })
             ) {
 
-                const botMember =
-                    membro.guild.members.me;
-
-                if (
-                    botMember &&
-                    cargoNaoVerificado.position <
-                    botMember.roles.highest.position
-                ) {
-
-                    await membro.roles.add(
-                        cargoNaoVerificado
-                    );
-                }
-            }
-
-            // =================================================
-            // CANAL DE VERIFICAÇÃO
-            // =================================================
-
-            if (!CANAL_VERIFICACAO_ID) {
-
-                console.log(
-                    "⚠️ CANAL_VERIFICACAO_ID não configurado no Render."
+                return mensagem.reply(
+                    "❌ Apenas o cargo **CGEX** pode usar este comando."
                 );
-
-                return;
-            }
-
-            const canal =
-                membro.guild.channels.cache.get(
-                    CANAL_VERIFICACAO_ID
-                );
-
-            if (!canal) {
-
-                console.log(
-                    "⚠️ Canal de verificação não encontrado."
-                );
-
-                return;
             }
 
             // =================================================
@@ -1272,19 +1226,16 @@ client.on(
                 new EmbedBuilder()
 
                     .setTitle(
-                        "🇧🇷 Bem-vindo ao EB!"
+                        "🇧🇷 Verificação EB"
                     )
 
                     .setDescription(
 
-                        `Olá, ${membro}!\n\n` +
+                        "Para entrar e permanecer no servidor, " +
+                        "você precisa vincular sua conta Roblox.\n\n" +
 
-                        `Para entrar no servidor, ` +
-                        `você precisa vincular sua ` +
-                        `conta Roblox.\n\n` +
-
-                        `Clique no botão abaixo ` +
-                        `para começar.`
+                        "Clique no botão abaixo para começar " +
+                        "a verificação."
                     )
 
                     .setFooter({
@@ -1318,10 +1269,10 @@ client.on(
                     );
 
             // =================================================
-            // ENVIAR PAINEL
+            // ENVIAR
             // =================================================
 
-            await canal.send({
+            await mensagem.channel.send({
 
                 embeds: [
                     embed
@@ -1334,13 +1285,62 @@ client.on(
             });
 
             console.log(
-                `👤 Novo membro aguardando verificação: ${membro.user.tag}`
+                `✅ Painel de verificação criado por ${mensagem.author.tag}`
             );
 
         } catch (erro) {
 
             console.error(
-                "❌ Erro no guildMemberAdd:",
+                "❌ Erro no !painelverificar:",
+                erro
+            );
+        }
+    }
+);
+
+// =====================================================
+// NOVO MEMBRO
+// =====================================================
+
+client.on(
+    "guildMemberAdd",
+    async membro => {
+
+        try {
+
+            const cargoNaoVerificado =
+                membro.guild.roles.cache.find(
+                    role =>
+                        role.name ===
+                        NOME_CARGO_NAO_VERIFICADO
+                );
+
+            if (
+                cargoNaoVerificado &&
+                !membro.roles.cache.has(
+                    cargoNaoVerificado.id
+                )
+            ) {
+
+                const botMember =
+                    membro.guild.members.me;
+
+                if (
+                    botMember &&
+                    cargoNaoVerificado.position <
+                    botMember.roles.highest.position
+                ) {
+
+                    await membro.roles.add(
+                        cargoNaoVerificado
+                    );
+                }
+            }
+
+        } catch (erro) {
+
+            console.error(
+                "❌ Erro ao adicionar cargo Não verificado:",
                 erro
             );
         }
@@ -1493,10 +1493,6 @@ client.on(
                         "❌ Esse usuário já possui esse cargo."
                     );
                 }
-
-                // =================================================
-                // CGEX
-                // =================================================
 
                 if (
                     !isCGEX(
