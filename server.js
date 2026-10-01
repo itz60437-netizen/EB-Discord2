@@ -1033,9 +1033,9 @@ const permissoes = {
 // VERIFICAR CGEX
 // =====================================================
 
-function isCGEX(interaction) {
+function isCGEX(member) {
 
-    return interaction.member.roles.cache.some(
+    return member.roles.cache.some(
         role =>
             role.name === "CGEX"
     );
@@ -1097,84 +1097,18 @@ const comandos = [
 );
 
 // =====================================================
-// REGISTRAR COMANDOS
+// NÃO REGISTRAR COMANDOS AUTOMATICAMENTE
 // =====================================================
-
-client.once(
-    "clientReady",
-    async () => {
-
-        console.log(
-            `✅ Bot online como ${client.user.tag}`
-        );
-
-        console.log(
-            `🆔 Client ID: ${DISCORD_CLIENT_ID}`
-        );
-
-        console.log(
-            `🏠 Guild ID: ${DISCORD_GUILD_ID}`
-        );
-
-        try {
-
-            const rest =
-                new REST({
-                    version: "10"
-                }).setToken(
-                    process.env.DISCORD_TOKEN
-                );
-
-            if (!process.env.DISCORD_TOKEN) {
-
-                throw new Error(
-                    "DISCORD_TOKEN não configurado."
-                );
-            }
-
-            const guild =
-                await client.guilds.fetch(
-                    DISCORD_GUILD_ID
-                );
-
-            if (!guild) {
-
-                throw new Error(
-                    "O bot não conseguiu acessar o servidor configurado."
-                );
-            }
-
-            console.log(
-                `✅ Servidor encontrado: ${guild.name}`
-            );
-
-            await rest.put(
-
-                Routes.applicationGuildCommands(
-
-                    DISCORD_CLIENT_ID,
-
-                    DISCORD_GUILD_ID
-                ),
-
-                {
-                    body: comandos
-                }
-            );
-
-            console.log(
-                "✅ Comandos registrados no servidor."
-            );
-
-        } catch (erro) {
-
-            console.error(
-                "❌ Erro ao registrar comandos:",
-                erro
-            );
-        }
-    }
-);
+//
+// O bloco antigo:
+//
+// client.once("clientReady", ... rest.put(...))
+//
+// FOI REMOVIDO.
+//
+// O bot NÃO vai mais tentar registrar comandos
+// usando DISCORD_GUILD_ID.
+// =====================================================
 
 // =====================================================
 // COMANDO !PAINELVERIFICAR
@@ -1186,7 +1120,9 @@ client.on(
 
         try {
 
-            if (mensagem.author.bot) {
+            if (
+                mensagem.author.bot
+            ) {
                 return;
             }
 
@@ -1197,25 +1133,29 @@ client.on(
             }
 
             if (
-                mensagem.content.toLowerCase() !==
+                mensagem.content
+                    .trim()
+                    .toLowerCase() !==
                 "!painelverificar"
             ) {
                 return;
             }
 
             // =================================================
-            // VERIFICAR PERMISSÃO
+            // VERIFICAR CGEX
             // =================================================
 
             if (
-                !isCGEX({
-                    member: mensagem.member
-                })
+                !isCGEX(
+                    mensagem.member
+                )
             ) {
 
-                return mensagem.reply(
+                await mensagem.reply(
                     "❌ Apenas o cargo **CGEX** pode usar este comando."
                 );
+
+                return;
             }
 
             // =================================================
@@ -1269,7 +1209,7 @@ client.on(
                     );
 
             // =================================================
-            // ENVIAR
+            // ENVIAR PAINEL
             // =================================================
 
             await mensagem.channel.send({
@@ -1285,7 +1225,7 @@ client.on(
             });
 
             console.log(
-                `✅ Painel de verificação criado por ${mensagem.author.tag}`
+                `✅ Painel criado por ${mensagem.author.tag}`
             );
 
         } catch (erro) {
@@ -1300,6 +1240,10 @@ client.on(
 
 // =====================================================
 // NOVO MEMBRO
+// =====================================================
+//
+// NÃO ENVIA MAIS PAINEL AUTOMATICAMENTE.
+// Apenas coloca o cargo Não verificado.
 // =====================================================
 
 client.on(
@@ -1333,6 +1277,10 @@ client.on(
 
                     await membro.roles.add(
                         cargoNaoVerificado
+                    );
+
+                    console.log(
+                        `🔒 Cargo Não verificado colocado em ${membro.user.tag}`
                     );
                 }
             }
@@ -1494,9 +1442,13 @@ client.on(
                     );
                 }
 
+                // =================================================
+                // CGEX
+                // =================================================
+
                 if (
                     !isCGEX(
-                        interaction
+                        interaction.member
                     )
                 ) {
 
@@ -1568,7 +1520,7 @@ client.on(
 
                 if (
                     !isCGEX(
-                        interaction
+                        interaction.member
                     )
                 ) {
 
