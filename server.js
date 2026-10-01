@@ -23,7 +23,6 @@ require("dotenv").config();
 const PORT = process.env.PORT || 3000;
 
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
-const DISCORD_CLIENT_ID = process.env.DISCORD_CLIENT_ID;
 
 const NOME_CARGO_NAO_VERIFICADO = "Não verificado";
 
@@ -31,8 +30,11 @@ const NOME_CARGO_NAO_VERIFICADO = "Não verificado";
 // ROBLOX OAUTH
 // ======================================================
 
-const ROBLOX_CLIENT_ID = process.env.ROBLOX_CLIENT_ID;
-const ROBLOX_CLIENT_SECRET = process.env.ROBLOX_CLIENT_SECRET;
+const ROBLOX_CLIENT_ID =
+    process.env.ROBLOX_CLIENT_ID;
+
+const ROBLOX_CLIENT_SECRET =
+    process.env.ROBLOX_CLIENT_SECRET;
 
 const ROBLOX_REDIRECT_URI =
     process.env.ROBLOX_REDIRECT_URI ||
@@ -42,11 +44,14 @@ const ROBLOX_REDIRECT_URI =
 // ROBLOX OPEN CLOUD
 // ======================================================
 
-const ROBLOX_API_KEY = process.env.ROBLOX_API_KEY;
+const ROBLOX_API_KEY =
+    process.env.ROBLOX_API_KEY;
 
-const ROBLOX_UNIVERSE_ID = "9875022038";
+const ROBLOX_UNIVERSE_ID =
+    "9875022038";
 
-const ROBLOX_DATASTORE = "EB_SISTEMA_V1";
+const ROBLOX_DATASTORE =
+    "EB_SISTEMA_V1";
 
 const ROBLOX_CLOUD_BASE =
     "https://apis.roblox.com/cloud/v2/";
@@ -170,6 +175,10 @@ async function buscarDadosRoblox(userId) {
 
     if (resposta.status === 404) {
 
+        console.log(
+            "[ROBLOX DATASTORE] Registro não encontrado."
+        );
+
         return null;
 
     }
@@ -179,6 +188,11 @@ async function buscarDadosRoblox(userId) {
         resposta.status === 403
     ) {
 
+        console.error(
+            "[ROBLOX DATASTORE] API Key recusada:",
+            resposta.data
+        );
+
         throw new Error(
             "Roblox recusou a API Key. " +
             "Verifique as permissões do DataStore."
@@ -187,6 +201,11 @@ async function buscarDadosRoblox(userId) {
     }
 
     if (resposta.status >= 400) {
+
+        console.error(
+            "[ROBLOX DATASTORE] Resposta:",
+            resposta.data
+        );
 
         throw new Error(
             `Roblox DataStore retornou HTTP ${resposta.status}: ` +
@@ -222,9 +241,17 @@ async function buscarDadosRoblox(userId) {
         typeof valor !== "object"
     ) {
 
+        console.log(
+            "[ROBLOX DATASTORE] Valor vazio ou inválido."
+        );
+
         return null;
 
     }
+
+    console.log(
+        "[ROBLOX DATASTORE] Dados encontrados."
+    );
 
     return valor;
 
@@ -291,6 +318,10 @@ function obterCargoDivisao(dados) {
         dados.cargoDivisao ||
         dados.CargoCIE ||
         dados.cargoCIE ||
+        dados.CargoBIP ||
+        dados.cargoBIP ||
+        dados.CargoBAC ||
+        dados.cargoBAC ||
         dados.Cargo ||
         dados.cargo ||
         ""
@@ -675,7 +706,7 @@ async function encontrarServidorDoUsuario(
 
         } catch (erro) {
 
-            // Usuário não está neste servidor
+            // Usuário não está neste servidor.
         }
 
     }
@@ -1280,32 +1311,6 @@ const comandos = [
         ),
 
     new SlashCommandBuilder()
-        .setName("darcargo")
-        .setDescription(
-            "Dá um cargo para um membro"
-        )
-
-        .addUserOption(
-            option =>
-                option
-                    .setName("usuario")
-                    .setDescription(
-                        "Usuário que receberá o cargo"
-                    )
-                    .setRequired(true)
-        )
-
-        .addStringOption(
-            option =>
-                option
-                    .setName("cargo")
-                    .setDescription(
-                        "Nome exato do cargo"
-                    )
-                    .setRequired(true)
-        ),
-
-    new SlashCommandBuilder()
         .setName("tiracargo")
         .setDescription(
             "Remove um cargo de um membro"
@@ -1337,393 +1342,6 @@ const comandos = [
 );
 
 // ======================================================
-// PERMISSÕES DE CARGOS
-// ======================================================
-
-const permissoes = {
-
-    "Civil": [
-
-        "3º Sargento",
-        "2º Sargento",
-        "1º Sargento",
-        "Subtenente",
-        "Cadete",
-
-        "Aspirante a Oficial",
-
-        "2º Tenente",
-        "1º Tenente",
-
-        "Capitão",
-        "Major",
-
-        "Tenente-Coronel",
-        "Coronel",
-
-        "General de Brigada",
-        "General de Divisão",
-        "General de Exército",
-
-        "Elite Militar",
-        "Elite Secreta",
-        "Elite Real"
-
-    ],
-
-    "Recruta": [
-
-        "Aspirante a Oficial",
-        "2º Tenente",
-        "1º Tenente",
-        "Capitão",
-        "Major",
-        "Tenente-Coronel",
-        "Coronel",
-        "General de Brigada",
-        "General de Divisão",
-        "General de Exército",
-        "Elite Militar",
-        "Elite Secreta",
-        "Elite Real"
-
-    ],
-
-    "Soldado": [
-
-        "Aspirante a Oficial",
-        "2º Tenente",
-        "1º Tenente",
-        "Capitão",
-        "Major",
-        "Tenente-Coronel",
-        "Coronel",
-        "General de Brigada",
-        "General de Divisão",
-        "General de Exército",
-        "Elite Militar",
-        "Elite Secreta",
-        "Elite Real"
-
-    ],
-
-    "Cabo": [
-
-        "Aspirante a Oficial",
-        "2º Tenente",
-        "1º Tenente",
-        "Capitão",
-        "Major",
-        "Tenente-Coronel",
-        "Coronel",
-        "General de Brigada",
-        "General de Divisão",
-        "General de Exército",
-        "Elite Militar",
-        "Elite Secreta",
-        "Elite Real"
-
-    ],
-
-    "3º Sargento": [
-        "Civil"
-    ],
-
-    "2º Sargento": [
-        "Civil"
-    ],
-
-    "1º Sargento": [
-        "Civil"
-    ],
-
-    "Subtenente": [
-        "Civil"
-    ],
-
-    "Cadete": [
-        "Civil"
-    ],
-
-    "Aspirante a Oficial": [
-
-        "Civil",
-        "Recruta",
-        "Soldado",
-        "Cabo",
-
-        "3º Sargento",
-        "2º Sargento",
-        "1º Sargento",
-
-        "Subtenente",
-        "Cadete"
-
-    ],
-
-    "2º Tenente": [
-
-        "Civil",
-        "Recruta",
-        "Soldado",
-        "Cabo",
-
-        "3º Sargento",
-        "2º Sargento",
-        "1º Sargento",
-
-        "Subtenente",
-        "Cadete"
-
-    ],
-
-    "1º Tenente": [
-
-        "Civil",
-        "Recruta",
-        "Soldado",
-        "Cabo",
-
-        "3º Sargento",
-        "2º Sargento",
-        "1º Sargento",
-
-        "Subtenente",
-        "Cadete"
-
-    ],
-
-    "Capitão": [
-
-        "Civil",
-        "Recruta",
-        "Soldado",
-        "Cabo",
-
-        "3º Sargento",
-        "2º Sargento",
-        "1º Sargento",
-
-        "Subtenente",
-        "Cadete"
-
-    ],
-
-    "Major": [
-
-        "Civil",
-        "Recruta",
-        "Soldado",
-        "Cabo",
-
-        "3º Sargento",
-        "2º Sargento",
-        "1º Sargento",
-
-        "Subtenente",
-        "Cadete"
-
-    ],
-
-    "Tenente-Coronel": [
-
-        "Civil",
-        "Recruta",
-        "Soldado",
-        "Cabo",
-
-        "3º Sargento",
-        "2º Sargento",
-        "1º Sargento",
-
-        "Subtenente",
-        "Cadete"
-
-    ],
-
-    "Coronel": [
-
-        "Civil",
-        "Recruta",
-        "Soldado",
-        "Cabo",
-
-        "3º Sargento",
-        "2º Sargento",
-        "1º Sargento",
-
-        "Subtenente",
-        "Cadete"
-
-    ],
-
-    "General de Brigada": [
-
-        "Civil",
-        "Recruta",
-        "Soldado",
-        "Cabo",
-
-        "3º Sargento",
-        "2º Sargento",
-        "1º Sargento",
-
-        "Subtenente",
-        "Cadete"
-
-    ],
-
-    "General de Divisão": [
-
-        "Civil",
-        "Recruta",
-        "Soldado",
-        "Cabo",
-
-        "3º Sargento",
-        "2º Sargento",
-        "1º Sargento",
-
-        "Subtenente",
-        "Cadete",
-
-        "Aspirante a Oficial",
-        "2º Tenente",
-        "1º Tenente",
-
-        "Capitão",
-        "Major",
-
-        "Tenente-Coronel",
-        "Coronel",
-
-        "General de Brigada"
-
-    ],
-
-    "General de Exército": [
-
-        "Civil",
-        "Recruta",
-        "Soldado",
-        "Cabo",
-
-        "3º Sargento",
-        "2º Sargento",
-        "1º Sargento",
-
-        "Subtenente",
-        "Cadete",
-
-        "Aspirante a Oficial",
-        "2º Tenente",
-        "1º Tenente",
-
-        "Capitão",
-        "Major",
-
-        "Tenente-Coronel",
-        "Coronel",
-
-        "General de Brigada",
-        "General de Divisão"
-
-    ],
-
-    "Elite Militar": [
-
-        "Civil",
-        "Recruta",
-        "Soldado",
-        "Cabo",
-
-        "3º Sargento",
-        "2º Sargento",
-        "1º Sargento",
-
-        "Subtenente",
-        "Cadete",
-
-        "Aspirante a Oficial",
-        "2º Tenente",
-        "1º Tenente",
-
-        "Capitão",
-        "Major",
-
-        "Tenente-Coronel",
-        "Coronel",
-
-        "General de Brigada",
-        "General de Divisão"
-
-    ],
-
-    "Elite Secreta": [
-
-        "Civil",
-        "Recruta",
-        "Soldado",
-        "Cabo",
-
-        "3º Sargento",
-        "2º Sargento",
-        "1º Sargento",
-
-        "Subtenente",
-        "Cadete",
-
-        "Aspirante a Oficial",
-        "2º Tenente",
-        "1º Tenente",
-
-        "Capitão",
-        "Major",
-
-        "Tenente-Coronel",
-        "Coronel",
-
-        "General de Brigada",
-        "General de Divisão"
-
-    ],
-
-    "Elite Real": [
-
-        "Civil",
-        "Recruta",
-        "Soldado",
-        "Cabo",
-
-        "3º Sargento",
-        "2º Sargento",
-        "1º Sargento",
-
-        "Subtenente",
-        "Cadete",
-
-        "Aspirante a Oficial",
-        "2º Tenente",
-        "1º Tenente",
-
-        "Capitão",
-        "Major",
-
-        "Tenente-Coronel",
-        "Coronel",
-
-        "General de Brigada",
-        "General de Divisão",
-        "General de Exército",
-
-        "Elite Militar",
-        "Elite Secreta"
-
-    ]
-
-};
-
-// ======================================================
 // CGEX
 // ======================================================
 
@@ -1749,6 +1367,19 @@ client.once(
             `🤖 Bot online como ${client.user.tag}`
         );
 
+        // ==========================================
+        // USAR O ID REAL DO BOT
+        // NÃO DEPENDE DE DISCORD_CLIENT_ID
+        // ==========================================
+
+        const applicationId =
+            client.user.id;
+
+        console.log(
+            "[DISCORD] Application ID:",
+            applicationId
+        );
+
         try {
 
             const rest =
@@ -1758,15 +1389,10 @@ client.once(
                     DISCORD_TOKEN
                 );
 
-            // ==========================================
-            // COMANDOS GLOBAIS
-            // NÃO USA MAIS DISCORD_GUILD_ID
-            // ==========================================
-
             await rest.put(
 
                 Routes.applicationCommands(
-                    DISCORD_CLIENT_ID
+                    applicationId
                 ),
 
                 {
@@ -1967,165 +1593,6 @@ client.on(
             }
 
             // ==========================================
-            // DAR CARGO
-            // ==========================================
-
-            if (
-                interaction.isChatInputCommand() &&
-                interaction.commandName ===
-                "darcargo"
-            ) {
-
-                const alvo =
-                    interaction.options.getMember(
-                        "usuario"
-                    );
-
-                const nomeCargo =
-                    interaction.options.getString(
-                        "cargo"
-                    );
-
-                if (!alvo) {
-
-                    return interaction.reply({
-
-                        content:
-                            "❌ Usuário não encontrado.",
-
-                        ephemeral: true
-
-                    });
-
-                }
-
-                const cargo =
-                    encontrarCargo(
-                        interaction.guild,
-                        nomeCargo
-                    );
-
-                if (!cargo) {
-
-                    return interaction.reply({
-
-                        content:
-                            `❌ O cargo **${nomeCargo}** não existe.`,
-
-                        ephemeral: true
-
-                    });
-
-                }
-
-                if (
-                    !interaction.member.permissions.has(
-                        PermissionFlagsBits.ManageRoles
-                    ) &&
-                    !isCGEX(
-                        interaction.member
-                    )
-                ) {
-
-                    return interaction.reply({
-
-                        content:
-                            "❌ Você não tem permissão para dar cargos.",
-
-                        ephemeral: true
-
-                    });
-
-                }
-
-                const cargoDoMembro =
-                    interaction.member.roles.highest;
-
-                const cargosPermitidos =
-                    permissoes[
-                        cargoDoMembro.name
-                    ] || [];
-
-                if (
-                    !isCGEX(
-                        interaction.member
-                    ) &&
-                    !cargosPermitidos.some(
-                        permitido =>
-                            normalizar(
-                                permitido
-                            ) ===
-                            normalizar(
-                                cargo.name
-                            )
-                    )
-                ) {
-
-                    return interaction.reply({
-
-                        content:
-                            "❌ Sua patente não pode dar esse cargo.",
-
-                        ephemeral: true
-
-                    });
-
-                }
-
-                const botMember =
-                    interaction.guild.members.me;
-
-                if (
-                    cargo.position >=
-                    botMember.roles.highest.position
-                ) {
-
-                    return interaction.reply({
-
-                        content:
-                            "❌ Meu cargo precisa estar acima do cargo que será dado.",
-
-                        ephemeral: true
-
-                    });
-
-                }
-
-                try {
-
-                    await alvo.roles.add(
-                        cargo,
-                        `Cargo dado por ${interaction.user.tag}`
-                    );
-
-                    return interaction.reply({
-
-                        content:
-                            `✅ Cargo **${cargo.name}** dado para ${alvo}.`
-
-                    });
-
-                } catch (erro) {
-
-                    console.error(
-                        "[DARCARGO]",
-                        erro
-                    );
-
-                    return interaction.reply({
-
-                        content:
-                            "❌ Não consegui dar o cargo. Verifique a hierarquia do bot.",
-
-                        ephemeral: true
-
-                    });
-
-                }
-
-            }
-
-            // ==========================================
             // TIRA CARGO
             // ==========================================
 
@@ -2194,6 +1661,40 @@ client.on(
 
                 }
 
+                const botMember =
+                    interaction.guild.members.me;
+
+                if (
+                    !botMember
+                ) {
+
+                    return interaction.reply({
+
+                        content:
+                            "❌ Não consegui localizar o bot.",
+
+                        ephemeral: true
+
+                    });
+
+                }
+
+                if (
+                    cargo.position >=
+                    botMember.roles.highest.position
+                ) {
+
+                    return interaction.reply({
+
+                        content:
+                            "❌ Meu cargo precisa estar acima do cargo que será retirado.",
+
+                        ephemeral: true
+
+                    });
+
+                }
+
                 try {
 
                     await alvo.roles.remove(
@@ -2236,7 +1737,8 @@ client.on(
             );
 
             if (
-                !interaction.replied
+                !interaction.replied &&
+                !interaction.deferred
             ) {
 
                 await interaction.reply({
