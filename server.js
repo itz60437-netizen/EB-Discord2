@@ -32,7 +32,7 @@ const ROBLOX_CLIENT_SECRET = process.env.ROBLOX_CLIENT_SECRET;
 
 const ROBLOX_REDIRECT_URI =
     process.env.ROBLOX_REDIRECT_URI ||
-    "https://eb-discord2-1.onrender.com/callback";
+    "https://eb-discord.onrender.com/callback";
 
 const DISCORD_GUILD_ID = process.env.DISCORD_GUILD_ID;
 
@@ -1016,13 +1016,6 @@ client.on(
                 interaction.customId ===
                 "vincular_roblox"
             ) {
-
-                /*
-                 * ALTERAÇÃO FEITA AQUI:
-                 *
-                 * O /auth agora recebe obrigatoriamente
-                 * o ID do usuário que clicou no botão.
-                 */
 
                 const authUrl =
                     `${ROBLOX_REDIRECT_URI.replace(
