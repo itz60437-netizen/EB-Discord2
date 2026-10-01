@@ -10,41 +10,33 @@ const {
     EmbedBuilder
 } = require("discord.js");
 
-const { REST } = require("@discordjs/rest");
+const {
+    REST
+} = require("@discordjs/rest");
+
 const express = require("express");
 const crypto = require("crypto");
 const axios = require("axios");
-
 require("dotenv").config();
 
 const app = express();
-
 const PORT = process.env.PORT || 3000;
 
 // =====================================================
 // CONFIGURAÇÕES
 // =====================================================
 
-const NOME_CARGO_NAO_VERIFICADO =
-    process.env.NOME_CARGO_NAO_VERIFICADO || "Não verificado";
+const CANAL_VERIFICACAO_ID = "1554839511824072704";
+const NOME_CARGO_NAO_VERIFICADO = "Não verificado";
 
-const ROBLOX_CLIENT_ID =
-    process.env.ROBLOX_CLIENT_ID;
-
-const ROBLOX_CLIENT_SECRET =
-    process.env.ROBLOX_CLIENT_SECRET;
+const ROBLOX_CLIENT_ID = process.env.ROBLOX_CLIENT_ID;
+const ROBLOX_CLIENT_SECRET = process.env.ROBLOX_CLIENT_SECRET;
 
 const ROBLOX_REDIRECT_URI =
     process.env.ROBLOX_REDIRECT_URI ||
-    "https://eb-discord.onrender.com/callback";
+    "https://eb-discord2-1.onrender.com/callback";
 
-const DISCORD_CLIENT_ID =
-    process.env.DISCORD_CLIENT_ID ||
-    "1554245914791772261";
-
-const DISCORD_GUILD_ID =
-    process.env.DISCORD_GUILD_ID ||
-    "1554839511824072704";
+const DISCORD_GUILD_ID = process.env.DISCORD_GUILD_ID;
 
 // =====================================================
 // CLIENT DISCORD
@@ -53,58 +45,36 @@ const DISCORD_GUILD_ID =
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
-        GatewayIntentBits.GuildMembers,
-        GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.MessageContent
+        GatewayIntentBits.GuildMembers
     ]
 });
-
-// =====================================================
-// SESSÕES OAUTH
-// =====================================================
-
-const estadosOAuth = new Map();
 
 // =====================================================
 // SERVIDOR WEB
 // =====================================================
 
 app.get("/", (req, res) => {
-
     res.send(`
-        <!DOCTYPE html>
-
         <html>
-
-        <head>
-            <meta charset="UTF-8">
-            <title>EB Discord</title>
-        </head>
-
-        <body style="
-            background:#111;
-            color:white;
-            font-family:Arial;
-            text-align:center;
-            padding-top:80px;
-        ">
-
-            <h1>🇧🇷 EB Discord Online</h1>
-
-            <p>Sistema funcionando.</p>
-
-        </body>
-
+            <head>
+                <meta charset="UTF-8">
+                <title>EB Discord</title>
+            </head>
+            <body>
+                <h1>🇧🇷 EB Discord Online</h1>
+                <p>Sistema funcionando.</p>
+            </body>
         </html>
     `);
 });
 
 // =====================================================
-// CODE CHALLENGE ROBLOX
+// OAUTH
 // =====================================================
 
-function gerarCodeChallenge(codeVerifier) {
+const estadosOAuth = new Map();
 
+function gerarCodeChallenge(codeVerifier) {
     return crypto
         .createHash("sha256")
         .update(codeVerifier)
@@ -119,38 +89,26 @@ function gerarCodeChallenge(codeVerifier) {
 // =====================================================
 
 app.get("/auth", (req, res) => {
-
     try {
-
         const discordId = req.query.discord;
 
         if (!discordId) {
-
-            return res
-                .status(400)
-                .send("Discord ID não informado.");
+            return res.status(400).send("Discord ID não informado.");
         }
 
-        if (
-            !ROBLOX_CLIENT_ID ||
-            !ROBLOX_CLIENT_SECRET
-        ) {
-
-            return res
-                .status(500)
-                .send(
-                    "ROBLOX_CLIENT_ID ou ROBLOX_CLIENT_SECRET não configurado."
-                );
+        if (!ROBLOX_CLIENT_ID || !ROBLOX_CLIENT_SECRET) {
+            return res.status(500).send(
+                "ROBLOX_CLIENT_ID ou ROBLOX_CLIENT_SECRET não configurado."
+            );
         }
 
-        const state =
-            crypto.randomBytes(32).toString("hex");
+        const state = crypto.randomBytes(32).toString("hex");
 
-        const codeVerifier =
-            crypto.randomBytes(64).toString("base64url");
+        const codeVerifier = crypto
+            .randomBytes(64)
+            .toString("base64url");
 
-        const codeChallenge =
-            gerarCodeChallenge(codeVerifier);
+        const codeChallenge = gerarCodeChallenge(codeVerifier);
 
         estadosOAuth.set(state, {
             discordId,
@@ -159,29 +117,14 @@ app.get("/auth", (req, res) => {
         });
 
         const params = new URLSearchParams({
-
-            client_id:
-                ROBLOX_CLIENT_ID,
-
-            redirect_uri:
-                ROBLOX_REDIRECT_URI,
-
-            scope:
-                "openid profile",
-
-            response_type:
-                "code",
-
-            state,
-
-            code_challenge:
-                codeChallenge,
-
-            code_challenge_method:
-                "S256",
-
-            prompt:
-                "login"
+            client_id: ROBLOX_CLIENT_ID,
+            redirect_uri: ROBLOX_REDIRECT_URI,
+            scope: "openid profile",
+            response_type: "code",
+            state: state,
+            code_challenge: codeChallenge,
+            code_challenge_method: "S256",
+            prompt: "login"
         });
 
         const url =
@@ -191,17 +134,11 @@ app.get("/auth", (req, res) => {
         res.redirect(url);
 
     } catch (erro) {
+        console.error("Erro ao iniciar OAuth:", erro);
 
-        console.error(
-            "Erro ao iniciar OAuth:",
-            erro
+        res.status(500).send(
+            "Erro ao iniciar vinculação com Roblox."
         );
-
-        res
-            .status(500)
-            .send(
-                "Erro ao iniciar vinculação com Roblox."
-            );
     }
 });
 
@@ -210,9 +147,7 @@ app.get("/auth", (req, res) => {
 // =====================================================
 
 app.get("/callback", async (req, res) => {
-
     try {
-
         const {
             code,
             state,
@@ -221,64 +156,41 @@ app.get("/callback", async (req, res) => {
         } = req.query;
 
         if (error) {
-
-            return res
-                .status(400)
-                .send(`
-                    <h1>❌ Login cancelado</h1>
-                    <p>
-                        ${
-                            error_description ||
-                            error
-                        }
-                    </p>
-                `);
+            return res.status(400).send(`
+                <h1>❌ Login cancelado</h1>
+                <p>${error_description || error}</p>
+            `);
         }
 
         if (!code || !state) {
-
-            return res
-                .status(400)
-                .send(
-                    "Código ou state não informado."
-                );
+            return res.status(400).send(
+                "Código ou state não informado."
+            );
         }
 
-        const dados =
-            estadosOAuth.get(state);
+        const dados = estadosOAuth.get(state);
 
         if (!dados) {
-
-            return res
-                .status(400)
-                .send(`
-                    <h1>❌ Sessão expirada</h1>
-                    <p>
-                        Volte ao Discord e tente novamente.
-                    </p>
-                `);
+            return res.status(400).send(`
+                <h1>❌ Sessão expirada</h1>
+                <p>Volte ao Discord e tente vincular novamente.</p>
+            `);
         }
 
         estadosOAuth.delete(state);
 
-        if (
-            Date.now() - dados.criadoEm >
-            10 * 60 * 1000
-        ) {
-
-            return res
-                .status(400)
-                .send(
-                    "Sessão expirada."
-                );
+        if (Date.now() - dados.criadoEm > 10 * 60 * 1000) {
+            return res.status(400).send(`
+                <h1>❌ Sessão expirada</h1>
+                <p>Volte ao Discord e tente novamente.</p>
+            `);
         }
 
         // =================================================
-        // TOKEN ROBLOX
+        // TROCAR CODE PELO TOKEN
         // =================================================
 
-        const tokenParams =
-            new URLSearchParams();
+        const tokenParams = new URLSearchParams();
 
         tokenParams.append(
             "client_id",
@@ -305,42 +217,39 @@ app.get("/callback", async (req, res) => {
             dados.codeVerifier
         );
 
-        const tokenResponse =
-            await axios.post(
-                "https://apis.roblox.com/oauth/v1/token",
-                tokenParams.toString(),
-                {
-                    headers: {
-                        "Content-Type":
-                            "application/x-www-form-urlencoded"
-                    }
+        const tokenResponse = await axios.post(
+            "https://apis.roblox.com/oauth/v1/token",
+            tokenParams.toString(),
+            {
+                headers: {
+                    "Content-Type":
+                        "application/x-www-form-urlencoded"
                 }
-            );
+            }
+        );
 
         const accessToken =
             tokenResponse.data.access_token;
 
         if (!accessToken) {
-
             throw new Error(
                 "Roblox não retornou access_token."
             );
         }
 
         // =================================================
-        // DADOS ROBLOX
+        // PEGAR DADOS DO USUÁRIO ROBLOX
         // =================================================
 
-        const userResponse =
-            await axios.get(
-                "https://apis.roblox.com/oauth/v1/userinfo",
-                {
-                    headers: {
-                        Authorization:
-                            `Bearer ${accessToken}`
-                    }
+        const userResponse = await axios.get(
+            "https://apis.roblox.com/oauth/v1/userinfo",
+            {
+                headers: {
+                    Authorization:
+                        `Bearer ${accessToken}`
                 }
-            );
+            }
+        );
 
         const robloxUser =
             userResponse.data;
@@ -352,9 +261,8 @@ app.get("/callback", async (req, res) => {
             robloxUser.sub;
 
         if (!robloxUsername) {
-
             throw new Error(
-                "Nome Roblox não encontrado."
+                "Nome de usuário Roblox não encontrado."
             );
         }
 
@@ -363,24 +271,38 @@ app.get("/callback", async (req, res) => {
         );
 
         // =================================================
-        // SERVIDOR
+        // PEGAR SERVIDOR DISCORD
+        // =================================================
+        //
+        // Primeiro tenta o ID configurado.
+        // Se estiver errado, usa o servidor em que
+        // o bot realmente está conectado.
         // =================================================
 
-        const guild =
-            client.guilds.cache.get(
-                DISCORD_GUILD_ID
-            ) ||
-            client.guilds.cache.first();
+        let guild = null;
+
+        if (DISCORD_GUILD_ID) {
+
+            guild =
+                client.guilds.cache.get(
+                    DISCORD_GUILD_ID
+                );
+        }
 
         if (!guild) {
 
+            guild =
+                client.guilds.cache.first();
+        }
+
+        if (!guild) {
             throw new Error(
                 "Servidor Discord não encontrado."
             );
         }
 
         // =================================================
-        // MEMBRO
+        // PEGAR MEMBRO
         // =================================================
 
         const membro =
@@ -388,62 +310,54 @@ app.get("/callback", async (req, res) => {
                 dados.discordId
             );
 
+        // =================================================
+        // VERIFICAR BOT
+        // =================================================
+
         const botMember =
             guild.members.me;
 
         if (!botMember) {
-
             throw new Error(
-                "Bot não encontrado no servidor."
+                "Não consegui encontrar o bot no servidor."
             );
         }
-
-        // =================================================
-        // PERMISSÃO NICKNAME
-        // =================================================
 
         if (
             !botMember.permissions.has(
                 PermissionFlagsBits.ManageNicknames
             )
         ) {
-
             throw new Error(
-                "O bot não possui Gerenciar Apelidos."
+                "O bot não possui a permissão Gerenciar Apelidos."
             );
         }
-
-        // =================================================
-        // PERMISSÃO CARGOS
-        // =================================================
 
         if (
             !botMember.permissions.has(
                 PermissionFlagsBits.ManageRoles
             )
         ) {
-
             throw new Error(
-                "O bot não possui Gerenciar Cargos."
+                "O bot não possui a permissão Gerenciar Cargos."
             );
         }
 
         // =================================================
-        // HIERARQUIA
+        // HIERARQUIA DO BOT
         // =================================================
 
         if (
             membro.roles.highest.position >=
             botMember.roles.highest.position
         ) {
-
             throw new Error(
-                "O cargo do usuário está acima ou no mesmo nível do bot."
+                "O cargo mais alto do usuário está acima ou no mesmo nível do bot."
             );
         }
 
         // =================================================
-        // ALTERAR NICK
+        // ALTERAR NICKNAME
         // =================================================
 
         await membro.setNickname(
@@ -464,20 +378,20 @@ app.get("/callback", async (req, res) => {
         if (cargoNaoVerificado) {
 
             if (
-                cargoNaoVerificado.position <
+                cargoNaoVerificado.position >=
                 botMember.roles.highest.position
             ) {
-
-                if (
-                    membro.roles.cache.has(
-                        cargoNaoVerificado.id
-                    )
-                ) {
-
-                    await membro.roles.remove(
-                        cargoNaoVerificado
-                    );
-                }
+                console.log(
+                    "⚠️ O cargo Não verificado está acima do bot."
+                );
+            } else if (
+                membro.roles.cache.has(
+                    cargoNaoVerificado.id
+                )
+            ) {
+                await membro.roles.remove(
+                    cargoNaoVerificado
+                );
             }
         }
 
@@ -486,65 +400,57 @@ app.get("/callback", async (req, res) => {
         // =================================================
 
         res.send(`
-
-            <!DOCTYPE html>
-
             <html>
+                <head>
+                    <meta charset="UTF-8">
+                    <title>Vinculação concluída</title>
+                    <style>
+                        body {
+                            background: #111;
+                            color: white;
+                            font-family: Arial;
+                            text-align: center;
+                            padding-top: 80px;
+                        }
 
-            <head>
+                        .box {
+                            background: #1c1c1c;
+                            padding: 30px;
+                            margin: auto;
+                            max-width: 500px;
+                            border-radius: 15px;
+                        }
 
-                <meta charset="UTF-8">
+                        h1 {
+                            color: #00ff88;
+                        }
+                    </style>
+                </head>
 
-                <title>
-                    Vinculação concluída
-                </title>
+                <body>
+                    <div class="box">
+                        <h1>✅ Vinculação concluída!</h1>
 
-            </head>
+                        <p>
+                            Sua conta Roblox foi vinculada
+                            com sucesso.
+                        </p>
 
-            <body style="
-                background:#111;
-                color:white;
-                font-family:Arial;
-                text-align:center;
-                padding-top:80px;
-            ">
+                        <p>
+                            <strong>Roblox:</strong>
+                            ${robloxUsername}
+                        </p>
 
-                <div style="
-                    background:#1c1c1c;
-                    padding:30px;
-                    margin:auto;
-                    max-width:500px;
-                    border-radius:15px;
-                ">
+                        <p>
+                            Seu apelido no Discord foi atualizado.
+                        </p>
 
-                    <h1 style="color:#00ff88">
-                        ✅ Vinculação concluída!
-                    </h1>
-
-                    <p>
-                        Sua conta Roblox foi vinculada.
-                    </p>
-
-                    <p>
-                        <strong>Roblox:</strong>
-                        ${robloxUsername}
-                    </p>
-
-                    <p>
-                        Seu apelido no Discord
-                        foi atualizado.
-                    </p>
-
-                    <p>
-                        Você pode voltar ao Discord.
-                    </p>
-
-                </div>
-
-            </body>
-
+                        <p>
+                            Você já pode voltar para o Discord.
+                        </p>
+                    </div>
+                </body>
             </html>
-
         `);
 
         console.log(
@@ -555,29 +461,39 @@ app.get("/callback", async (req, res) => {
 
         console.error(
             "Erro no callback Roblox:",
-            erro.response?.data ||
-            erro.message
+            erro.response?.data || erro.message
         );
 
-        res
-            .status(500)
-            .send(`
-                <h1>❌ Erro ao vincular</h1>
-                <p>
-                    Não foi possível concluir a vinculação.
-                </p>
-            `);
+        res.status(500).send(`
+            <html>
+                <head>
+                    <meta charset="UTF-8">
+                    <title>Erro</title>
+                </head>
+
+                <body>
+                    <h1>❌ Erro ao vincular</h1>
+
+                    <p>
+                        Não foi possível concluir a vinculação.
+                    </p>
+
+                    <p>
+                        Volte ao Discord e tente novamente.
+                    </p>
+                </body>
+            </html>
+        `);
     }
 });
 
 // =====================================================
-// LIMPAR OAUTH EXPIRADO
+// LIMPAR SESSÕES OAUTH EXPIRADAS
 // =====================================================
 
 setInterval(() => {
 
-    const agora =
-        Date.now();
+    const agora = Date.now();
 
     for (
         const [state, dados]
@@ -588,7 +504,6 @@ setInterval(() => {
             agora - dados.criadoEm >
             10 * 60 * 1000
         ) {
-
             estadosOAuth.delete(state);
         }
     }
@@ -596,50 +511,448 @@ setInterval(() => {
 }, 60 * 1000);
 
 // =====================================================
-// COMANDO /PAINELVERIFICAR
+// PERMISSÕES DOS CARGOS
+// =====================================================
+
+const permissoes = {
+
+    "Civil": [],
+
+    "Recruta": [],
+
+    "Soldado": [],
+
+    "Cabo": [],
+
+    "3ºSargento": [
+        "Civil"
+    ],
+
+    "2ºSargento": [
+        "Civil"
+    ],
+
+    "1º Sargento": [
+        "Civil"
+    ],
+
+    "Subtenente": [
+        "Civil"
+    ],
+
+    "Cadete": [
+        "Civil"
+    ],
+
+    "Aspirante a Oficial": [
+        "Civil",
+        "Recruta",
+        "Soldado",
+        "Cabo",
+        "3ºSargento",
+        "2ºSargento",
+        "1º Sargento",
+        "Subtenente",
+        "Cadete"
+    ],
+
+    "2ºTenente": [
+        "Civil",
+        "Recruta",
+        "Soldado",
+        "Cabo",
+        "3ºSargento",
+        "2ºSargento",
+        "1º Sargento",
+        "Subtenente",
+        "Cadete"
+    ],
+
+    "1ºTenente": [
+        "Civil",
+        "Recruta",
+        "Soldado",
+        "Cabo",
+        "3ºSargento",
+        "2ºSargento",
+        "1º Sargento",
+        "Subtenente",
+        "Cadete"
+    ],
+
+    "Capitão": [
+        "Civil",
+        "Recruta",
+        "Soldado",
+        "Cabo",
+        "3ºSargento",
+        "2ºSargento",
+        "1º Sargento",
+        "Subtenente",
+        "Cadete"
+    ],
+
+    "Major": [
+        "Civil",
+        "Recruta",
+        "Soldado",
+        "Cabo",
+        "3ºSargento",
+        "2ºSargento",
+        "1º Sargento",
+        "Subtenente",
+        "Cadete"
+    ],
+
+    "Tenente-Coronel": [
+        "Civil",
+        "Recruta",
+        "Soldado",
+        "Cabo",
+        "3ºSargento",
+        "2ºSargento",
+        "1º Sargento",
+        "Subtenente",
+        "Cadete"
+    ],
+
+    "Coronel": [
+        "Civil",
+        "Recruta",
+        "Soldado",
+        "Cabo",
+        "3ºSargento",
+        "2ºSargento",
+        "1º Sargento",
+        "Subtenente",
+        "Cadete"
+    ],
+
+    "General de Brigada": [
+        "Civil",
+        "Recruta",
+        "Soldado",
+        "Cabo",
+        "3ºSargento",
+        "2ºSargento",
+        "1º Sargento",
+        "Subtenente",
+        "Cadete",
+        "Aspirante a Oficial",
+        "2ºTenente",
+        "1ºTenente",
+        "Capitão",
+        "Major",
+        "Tenente-Coronel",
+        "Coronel",
+        "General de Brigada"
+    ],
+
+    "General de Divisão": [
+        "Civil",
+        "Recruta",
+        "Soldado",
+        "Cabo",
+        "3ºSargento",
+        "2ºSargento",
+        "1º Sargento",
+        "Subtenente",
+        "Cadete",
+        "Aspirante a Oficial",
+        "2ºTenente",
+        "1ºTenente",
+        "Capitão",
+        "Major",
+        "Tenente-Coronel",
+        "Coronel",
+        "General de Brigada"
+    ],
+
+    "General de Exército": [
+        "Civil",
+        "Recruta",
+        "Soldado",
+        "Cabo",
+        "3ºSargento",
+        "2ºSargento",
+        "1º Sargento",
+        "Subtenente",
+        "Cadete",
+        "Aspirante a Oficial",
+        "2ºTenente",
+        "1ºTenente",
+        "Capitão",
+        "Major",
+        "Tenente-Coronel",
+        "Coronel",
+        "General de Brigada"
+    ],
+
+    "Elite Militar": [
+        "Civil",
+        "Recruta",
+        "Soldado",
+        "Cabo",
+        "3ºSargento",
+        "2ºSargento",
+        "1º Sargento",
+        "Subtenente",
+        "Cadete",
+        "Aspirante a Oficial",
+        "2ºTenente",
+        "1ºTenente",
+        "Capitão",
+        "Major",
+        "Tenente-Coronel",
+        "Coronel",
+        "General de Brigada"
+    ],
+
+    "Elite Secreta": [
+        "Civil",
+        "Recruta",
+        "Soldado",
+        "Cabo",
+        "3ºSargento",
+        "2ºSargento",
+        "1º Sargento",
+        "Subtenente",
+        "Cadete",
+        "Aspirante a Oficial",
+        "2ºTenente",
+        "1ºTenente",
+        "Capitão",
+        "Major",
+        "Tenente-Coronel",
+        "Coronel",
+        "General de Brigada"
+    ],
+
+    "Elite Real": [
+        "Civil",
+        "Recruta",
+        "Soldado",
+        "Cabo",
+        "3ºSargento",
+        "2ºSargento",
+        "1º Sargento",
+        "Subtenente",
+        "Cadete",
+        "Aspirante a Oficial",
+        "2ºTenente",
+        "1ºTenente",
+        "Capitão",
+        "Major",
+        "Tenente-Coronel",
+        "Coronel",
+        "General de Brigada"
+    ],
+
+    "Comandante do BAC": [
+        "Subcomandante do BAC",
+        "Instrutor BAC",
+        "Comandos BAC",
+        "Aluno a Comandos BAC",
+        "Aluno BAC",
+        "Candidato BAC"
+    ],
+
+    "Subcomandante do BAC": [
+        "Instrutor BAC",
+        "Comandos BAC",
+        "Aluno a Comandos BAC",
+        "Aluno BAC",
+        "Candidato BAC"
+    ],
+
+    "Instrutor BAC": [
+        "Candidato BAC",
+        "Aluno BAC",
+        "Aluno a Comandos BAC"
+    ],
+
+    "Comandante da BIP": [
+        "Subcomandante da BIP",
+        "Professor Geral BIP",
+        "Professor BIP",
+        "Instrutor BIP",
+        "Paraquedista BIP",
+        "Estagiário BIP",
+        "Aluno BIP",
+        "Candidato BIP"
+    ],
+
+    "Subcomandante da BIP": [
+        "Professor Geral BIP",
+        "Professor BIP",
+        "Instrutor BIP",
+        "Paraquedista BIP",
+        "Estagiário BIP",
+        "Aluno BIP",
+        "Candidato BIP"
+    ],
+
+    "Professor Geral BIP": [
+        "Candidato BIP",
+        "Aluno BIP",
+        "Estagiário BIP",
+        "Paraquedista BIP",
+        "Instrutor BIP",
+        "Professor BIP"
+    ],
+
+    "Professor BIP": [
+        "Candidato BIP",
+        "Aluno BIP",
+        "Estagiário BIP",
+        "Paraquedista BIP",
+        "Instrutor BIP"
+    ],
+
+    "Instrutor BIP": [
+        "Candidato BIP",
+        "Aluno BIP",
+        "Estagiário BIP",
+        "Paraquedista BIP"
+    ],
+
+    "Comandante do CIE": [
+        "Subcomandante do CIE",
+        "Instrutor CIE",
+        "Professor CIE",
+        "Aluno a Professor CIE",
+        "Aluno CIE",
+        "Candidato CIE"
+    ],
+
+    "Subcomandante do CIE": [
+        "Instrutor CIE",
+        "Professor CIE",
+        "Aluno a Professor CIE",
+        "Aluno CIE",
+        "Candidato CIE"
+    ],
+
+    "Instrutor CIE": [
+        "Candidato CIE",
+        "Aluno CIE",
+        "Aluno a Professor CIE"
+    ],
+
+    "Professor CIE": [
+        "Candidato CIE",
+        "Aluno CIE",
+        "Aluno a Professor CIE"
+    ]
+};
+
+// =====================================================
+// VERIFICAR CGEX
+// =====================================================
+
+function isCGEX(interaction) {
+
+    return interaction.member.roles.cache.some(
+        role => role.name === "CGEX"
+    );
+}
+
+// =====================================================
+// COMANDOS SLASH
 // =====================================================
 
 const comandos = [
 
     new SlashCommandBuilder()
+        .setName("darcargo")
+        .setDescription("Dá um cargo a um usuário.")
+        .addUserOption(option =>
+            option
+                .setName("usuario")
+                .setDescription("Usuário")
+                .setRequired(true)
+        )
+        .addRoleOption(option =>
+            option
+                .setName("cargo")
+                .setDescription("Cargo")
+                .setRequired(true)
+        ),
+
+    new SlashCommandBuilder()
+        .setName("tiracargo")
+        .setDescription("Remove um cargo de um usuário.")
+        .addUserOption(option =>
+            option
+                .setName("usuario")
+                .setDescription("Usuário")
+                .setRequired(true)
+        )
+        .addRoleOption(option =>
+            option
+                .setName("cargo")
+                .setDescription("Cargo")
+                .setRequired(true)
+        ),
+
+    // =================================================
+    // NOVO COMANDO
+    // =================================================
+
+    new SlashCommandBuilder()
         .setName("painelverificar")
         .setDescription(
-            "Envia o painel de verificação Roblox."
+            "Envia o painel para vincular a conta Roblox."
         )
 
-].map(
-    comando =>
-        comando.toJSON()
-);
+].map(command => command.toJSON());
 
 // =====================================================
-// REGISTRAR SOMENTE /PAINELVERIFICAR
+// REGISTRAR COMANDOS
 // =====================================================
 //
-// IMPORTANTE:
-// Não usa guild.fetch()
-// Não usa DISCORD_GUILD_ID
-// Não registra painel automaticamente.
+// Usa o servidor em que o bot está conectado.
+// Assim não depende de um DISCORD_GUILD_ID errado.
 // =====================================================
 
-client.once("clientReady", async () => {
+client.once("ready", async () => {
 
     console.log(
-        `🤖 Bot conectado como ${client.user.tag}`
+        `✅ Bot online como ${client.user.tag}`
     );
 
     try {
 
-        const rest =
-            new REST({
-                version: "10"
-            }).setToken(
-                process.env.DISCORD_TOKEN
+        const guild =
+            client.guilds.cache.first();
+
+        if (!guild) {
+
+            console.error(
+                "❌ O bot não está em nenhum servidor."
             );
 
+            return;
+        }
+
+        console.log(
+            `🏠 Servidor encontrado: ${guild.name}`
+        );
+
+        console.log(
+            `🆔 ID do servidor: ${guild.id}`
+        );
+
+        const rest = new REST({
+            version: "10"
+        }).setToken(
+            process.env.DISCORD_TOKEN
+        );
+
         await rest.put(
-            Routes.applicationCommands(
-                DISCORD_CLIENT_ID
+            Routes.applicationGuildCommands(
+                client.user.id,
+                guild.id
             ),
             {
                 body: comandos
@@ -647,71 +960,60 @@ client.once("clientReady", async () => {
         );
 
         console.log(
-            "✅ Comando /painelverificar registrado."
+            "✅ /darcargo registrado."
+        );
+
+        console.log(
+            "✅ /tiracargo registrado."
+        );
+
+        console.log(
+            "✅ /painelverificar registrado."
         );
 
     } catch (erro) {
 
         console.error(
-            "❌ Erro ao registrar /painelverificar:",
+            "❌ Erro ao registrar comandos:",
             erro
         );
     }
 });
 
 // =====================================================
-// ENTRADA DE NOVO MEMBRO
+// NOVO MEMBRO
 // =====================================================
 //
-// ATENÇÃO:
-// NÃO EXISTE ENVIO DE PAINEL AQUI.
+// IMPORTANTE:
+// NÃO ENVIA PAINEL.
+// SOMENTE COLOCA "Não verificado".
 // =====================================================
 
-client.on(
-    "guildMemberAdd",
-    async membro => {
+client.on("guildMemberAdd", async membro => {
 
-        try {
+    try {
 
-            const cargoNaoVerificado =
-                membro.guild.roles.cache.find(
-                    role =>
-                        role.name ===
-                        NOME_CARGO_NAO_VERIFICADO
-                );
+        const cargoNaoVerificado =
+            membro.guild.roles.cache.find(
+                role =>
+                    role.name ===
+                    NOME_CARGO_NAO_VERIFICADO
+            );
 
-            if (!cargoNaoVerificado) {
-
-                console.log(
-                    "⚠️ Cargo Não verificado não encontrado."
-                );
-
-                return;
-            }
+        if (
+            cargoNaoVerificado &&
+            !membro.roles.cache.has(
+                cargoNaoVerificado.id
+            )
+        ) {
 
             const botMember =
                 membro.guild.members.me;
 
-            if (!botMember) {
-                return;
-            }
-
             if (
-                cargoNaoVerificado.position >=
+                botMember &&
+                cargoNaoVerificado.position <
                 botMember.roles.highest.position
-            ) {
-
-                console.log(
-                    "⚠️ Cargo Não verificado está acima do bot."
-                );
-
-                return;
-            }
-
-            if (
-                !membro.roles.cache.has(
-                    cargoNaoVerificado.id
-                )
             ) {
 
                 await membro.roles.add(
@@ -722,257 +1024,387 @@ client.on(
                     `🔒 ${membro.user.tag} recebeu Não verificado.`
                 );
             }
-
-        } catch (erro) {
-
-            console.error(
-                "❌ Erro ao colocar Não verificado:",
-                erro
-            );
         }
+
+        // =================================================
+        // NÃO HÁ ENVIO DE PAINEL AQUI.
+        // =================================================
+
+    } catch (erro) {
+
+        console.error(
+            "❌ Erro ao adicionar Não verificado:",
+            erro
+        );
     }
-);
+});
 
 // =====================================================
 // INTERAÇÕES
 // =====================================================
 
-client.on(
-    "interactionCreate",
-    async interaction => {
+client.on("interactionCreate", async interaction => {
 
-        try {
+    try {
 
-            // =================================================
-            // /PAINELVERIFICAR
-            // =================================================
+        // =================================================
+        // /PAINELVERIFICAR
+        // =================================================
 
-            if (
-                interaction.isChatInputCommand() &&
-                interaction.commandName ===
-                "painelverificar"
-            ) {
+        if (
+            interaction.isChatInputCommand() &&
+            interaction.commandName ===
+            "painelverificar"
+        ) {
 
-                // ---------------------------------------------
-                // CGEX
-                // ---------------------------------------------
+            const embed =
+                new EmbedBuilder()
+                    .setTitle(
+                        "🇧🇷 Verificação EB"
+                    )
+                    .setDescription(
+                        "Para verificar sua conta e liberar " +
+                        "seu acesso ao servidor, você precisa " +
+                        "vincular sua conta Roblox.\n\n" +
+                        "Clique no botão abaixo para começar."
+                    )
+                    .setFooter({
+                        text:
+                            "EB | Sistema de Verificação"
+                    });
 
-                const temCGEX =
-                    interaction.member.roles.cache.some(
-                        role =>
-                            role.name ===
-                            "CGEX"
+            const botao =
+                new ButtonBuilder()
+                    .setCustomId(
+                        "vincular_roblox"
+                    )
+                    .setLabel(
+                        "🔗 Vincular Roblox"
+                    )
+                    .setStyle(
+                        ButtonStyle.Primary
                     );
 
-                if (!temCGEX) {
+            const row =
+                new ActionRowBuilder()
+                    .addComponents(
+                        botao
+                    );
 
-                    return interaction.reply({
+            await interaction.channel.send({
+                embeds: [
+                    embed
+                ],
+                components: [
+                    row
+                ]
+            });
 
-                        content:
-                            "❌ Apenas o cargo **CGEX** pode usar este comando.",
+            return interaction.reply({
+                content:
+                    "✅ Painel de verificação enviado.",
+                ephemeral: true
+            });
+        }
 
-                        ephemeral:
-                            true
-                    });
-                }
+        // =================================================
+        // BOTÃO VINCULAR ROBLOX
+        // =================================================
 
-                // ---------------------------------------------
-                // EMBED
-                // ---------------------------------------------
+        if (
+            interaction.isButton() &&
+            interaction.customId ===
+            "vincular_roblox"
+        ) {
 
-                const embed =
-                    new EmbedBuilder()
-
-                        .setTitle(
-                            "🇧🇷 Verificação EB"
-                        )
-
-                        .setDescription(
-
-                            "Para verificar sua conta e liberar " +
-                            "seu acesso ao servidor, você precisa " +
-                            "vincular sua conta Roblox.\n\n" +
-
-                            "Clique no botão abaixo para começar " +
-                            "a verificação."
-                        )
-
-                        .setFooter({
-                            text:
-                                "EB | Sistema de Verificação"
-                        });
-
-                // ---------------------------------------------
-                // BOTÃO
-                // ---------------------------------------------
-
-                const botao =
-                    new ButtonBuilder()
-
-                        .setCustomId(
-                            "vincular_roblox"
-                        )
-
-                        .setLabel(
-                            "🔗 Vincular Roblox"
-                        )
-
-                        .setStyle(
-                            ButtonStyle.Primary
-                        );
-
-                const row =
-                    new ActionRowBuilder()
-                        .addComponents(
-                            botao
-                        );
-
-                // ---------------------------------------------
-                // ENVIAR PAINEL
-                // ---------------------------------------------
-
-                await interaction.channel.send({
-
-                    embeds: [
-                        embed
-                    ],
-
-                    components: [
-                        row
-                    ]
-                });
+            if (!ROBLOX_CLIENT_ID) {
 
                 return interaction.reply({
-
                     content:
-                        "✅ Painel de verificação enviado.",
-
-                    ephemeral:
-                        true
+                        "❌ O sistema Roblox ainda não está configurado.",
+                    ephemeral: true
                 });
             }
 
-            // =================================================
-            // BOTÃO VINCULAR ROBLOX
-            // =================================================
-
-            if (
-                interaction.isButton() &&
-                interaction.customId ===
-                "vincular_roblox"
-            ) {
-
-                if (!ROBLOX_CLIENT_ID) {
-
-                    return interaction.reply({
-
-                        content:
-                            "❌ O sistema Roblox ainda não está configurado.",
-
-                        ephemeral:
-                            true
-                    });
-                }
-
-                const authUrl =
-                    ROBLOX_REDIRECT_URI.replace(
+            const authUrl =
+                ROBLOX_REDIRECT_URI
+                    .replace(
                         "/callback",
                         "/auth"
                     ) +
-                    "?discord=" +
-                    encodeURIComponent(
-                        interaction.user.id
-                    );
+                "?discord=" +
+                encodeURIComponent(
+                    interaction.user.id
+                );
 
-                return interaction.reply({
+            return interaction.reply({
+                content:
+                    "🔗 **Clique abaixo para vincular sua conta Roblox:**\n\n" +
+                    `[🇧🇷 Vincular Roblox](${authUrl})`,
+                ephemeral: true
+            });
+        }
 
-                    content:
+        // =================================================
+        // SLASH COMMANDS
+        // =================================================
 
-                        "🔗 **Clique abaixo para vincular sua conta Roblox:**\n\n" +
+        if (!interaction.isChatInputCommand()) {
+            return;
+        }
 
-                        `[🇧🇷 Vincular Roblox](${authUrl})`,
+        // =================================================
+        // /DARCARGO
+        // =================================================
 
-                    ephemeral:
-                        true
-                });
+        if (
+            interaction.commandName ===
+            "darcargo"
+        ) {
+
+            await interaction.deferReply({
+                ephemeral: true
+            });
+
+            const usuario =
+                interaction.options.getUser(
+                    "usuario"
+                );
+
+            const cargo =
+                interaction.options.getRole(
+                    "cargo"
+                );
+
+            if (!usuario || !cargo) {
+
+                return interaction.editReply(
+                    "❌ Usuário ou cargo inválido."
+                );
             }
 
-        } catch (erro) {
+            const membro =
+                await interaction.guild.members
+                    .fetch(usuario.id)
+                    .catch(() => null);
 
-            console.error(
-                "❌ Erro na interação:",
-                erro
-            );
+            if (!membro) {
+
+                return interaction.editReply(
+                    "❌ Não encontrei esse usuário no servidor."
+                );
+            }
+
+            const botMember =
+                interaction.guild.members.me;
+
+            if (!botMember.permissions.has(
+                PermissionFlagsBits.ManageRoles
+            )) {
+
+                return interaction.editReply(
+                    "❌ O bot não possui a permissão Gerenciar Cargos."
+                );
+            }
 
             if (
-                interaction.deferred
+                cargo.position >=
+                botMember.roles.highest.position
             ) {
 
-                await interaction
-                    .editReply(
-                        "❌ Ocorreu um erro."
-                    )
-                    .catch(
-                        () => {}
-                    );
-
-            } else if (
-                !interaction.replied
-            ) {
-
-                await interaction
-                    .reply({
-
-                        content:
-                            "❌ Ocorreu um erro.",
-
-                        ephemeral:
-                            true
-                    })
-                    .catch(
-                        () => {}
-                    );
+                return interaction.editReply(
+                    "❌ Esse cargo está acima ou no mesmo nível do meu cargo."
+                );
             }
+
+            if (
+                membro.roles.cache.has(
+                    cargo.id
+                )
+            ) {
+
+                return interaction.editReply(
+                    "❌ Esse usuário já possui esse cargo."
+                );
+            }
+
+            if (!isCGEX(interaction)) {
+
+                const cargosExecutor =
+                    interaction.member.roles.cache
+                        .map(role => role.name);
+
+                let podeDar = false;
+
+                for (
+                    const cargoExecutor
+                    of cargosExecutor
+                ) {
+
+                    const permitidos =
+                        permissoes[
+                            cargoExecutor
+                        ];
+
+                    if (
+                        permitidos &&
+                        permitidos.includes(
+                            cargo.name
+                        )
+                    ) {
+
+                        podeDar = true;
+                        break;
+                    }
+                }
+
+                if (!podeDar) {
+
+                    return interaction.editReply(
+                        "❌ Você não possui permissão para dar esse cargo."
+                    );
+                }
+            }
+
+            await membro.roles.add(cargo);
+
+            return interaction.editReply(
+                `✅ O cargo **${cargo.name}** foi dado para ${membro}.`
+            );
+        }
+
+        // =================================================
+        // /TIRACARGO
+        // =================================================
+
+        if (
+            interaction.commandName ===
+            "tiracargo"
+        ) {
+
+            await interaction.deferReply({
+                ephemeral: true
+            });
+
+            if (!isCGEX(interaction)) {
+
+                return interaction.editReply(
+                    "❌ Apenas o cargo **CGEX** pode usar este comando."
+                );
+            }
+
+            const usuario =
+                interaction.options.getUser(
+                    "usuario"
+                );
+
+            const cargo =
+                interaction.options.getRole(
+                    "cargo"
+                );
+
+            if (!usuario || !cargo) {
+
+                return interaction.editReply(
+                    "❌ Usuário ou cargo inválido."
+                );
+            }
+
+            const membro =
+                await interaction.guild.members
+                    .fetch(usuario.id)
+                    .catch(() => null);
+
+            if (!membro) {
+
+                return interaction.editReply(
+                    "❌ Não encontrei esse usuário no servidor."
+                );
+            }
+
+            const botMember =
+                interaction.guild.members.me;
+
+            if (!botMember.permissions.has(
+                PermissionFlagsBits.ManageRoles
+            )) {
+
+                return interaction.editReply(
+                    "❌ O bot não possui a permissão Gerenciar Cargos."
+                );
+            }
+
+            if (
+                cargo.position >=
+                botMember.roles.highest.position
+            ) {
+
+                return interaction.editReply(
+                    "❌ Esse cargo está acima ou no mesmo nível do meu cargo."
+                );
+            }
+
+            if (
+                !membro.roles.cache.has(
+                    cargo.id
+                )
+            ) {
+
+                return interaction.editReply(
+                    "❌ Esse usuário não possui esse cargo."
+                );
+            }
+
+            await membro.roles.remove(
+                cargo
+            );
+
+            return interaction.editReply(
+                `✅ O cargo **${cargo.name}** foi removido de ${membro}.`
+            );
+        }
+
+    } catch (erro) {
+
+        console.error(
+            "❌ Erro na interação:",
+            erro
+        );
+
+        if (interaction.deferred) {
+
+            await interaction.editReply(
+                "❌ Ocorreu um erro ao executar o comando."
+            ).catch(() => {});
+
+        } else if (!interaction.replied) {
+
+            await interaction.reply({
+                content:
+                    "❌ Ocorreu um erro.",
+                ephemeral: true
+            }).catch(() => {});
         }
     }
-);
+});
 
 // =====================================================
-// SERVIDOR WEB
+// INICIAR SERVIDOR WEB
 // =====================================================
 
-app.listen(
-    PORT,
-    () => {
+app.listen(PORT, () => {
 
-        console.log(
-            `🌐 Servidor web rodando na porta ${PORT}`
-        );
+    console.log(
+        `🌐 Servidor web rodando na porta ${PORT}`
+    );
 
-        console.log(
-            `🔗 Callback Roblox: ${ROBLOX_REDIRECT_URI}`
-        );
-
-        console.log(
-            `🆔 Discord Client ID: ${DISCORD_CLIENT_ID}`
-        );
-
-        console.log(
-            "📋 Painel automático: DESATIVADO"
-        );
-
-        console.log(
-            "👤 Painel ao entrar: DESATIVADO"
-        );
-
-        console.log(
-            "⚙️ Comando: /painelverificar"
-        );
-    }
-);
+    console.log(
+        `🔗 Callback Roblox: ${ROBLOX_REDIRECT_URI}`
+    );
+});
 
 // =====================================================
-// LOGIN
+// LOGIN DISCORD
 // =====================================================
 
 client.login(
