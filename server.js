@@ -32,7 +32,7 @@ const ROBLOX_CLIENT_SECRET = process.env.ROBLOX_CLIENT_SECRET;
 
 const ROBLOX_REDIRECT_URI =
     process.env.ROBLOX_REDIRECT_URI ||
-    "https://eb-discord.onrender.com/callback";
+    "https://eb-discord2-1.onrender.com/callback";
 
 const DISCORD_GUILD_ID = process.env.DISCORD_GUILD_ID;
 
@@ -69,6 +69,7 @@ app.get("/", (req, res) => {
                 <title>EB Discord</title>
                 <meta charset="UTF-8">
             </head>
+
             <body>
                 <h1>EB Discord Online</h1>
                 <p>Sistema funcionando.</p>
@@ -115,9 +116,14 @@ app.get("/auth", async (req, res) => {
                         <meta charset="UTF-8">
                         <title>Erro</title>
                     </head>
+
                     <body>
                         <h2>❌ ID do Discord não informado.</h2>
-                        <p>Abra este endereço através do botão de vinculação no Discord.</p>
+
+                        <p>
+                            Abra este endereço através do botão
+                            de vinculação no Discord.
+                        </p>
                     </body>
                 </html>
             `);
@@ -150,11 +156,19 @@ app.get("/auth", async (req, res) => {
             "https://apis.roblox.com/oauth/v1/authorize?" +
             params.toString();
 
+        console.log(
+            "🔗 Iniciando OAuth para Discord:",
+            discordId
+        );
+
         res.redirect(url);
 
     } catch (erro) {
 
-        console.error("❌ Erro no /auth:", erro);
+        console.error(
+            "❌ Erro no /auth:",
+            erro
+        );
 
         res.status(500).send(`
             <h2>❌ Erro ao iniciar a vinculação.</h2>
@@ -192,12 +206,14 @@ app.get("/callback", async (req, res) => {
 
         sessoesOAuth.delete(state);
 
+
         // ==================================================
         // TROCAR CODE PELO TOKEN
         // ==================================================
 
         const tokenResponse = await axios.post(
             "https://apis.roblox.com/oauth/v1/token",
+
             new URLSearchParams({
                 client_id: ROBLOX_CLIENT_ID,
                 client_secret: ROBLOX_CLIENT_SECRET,
@@ -206,6 +222,7 @@ app.get("/callback", async (req, res) => {
                 redirect_uri: ROBLOX_REDIRECT_URI,
                 code_verifier: sessao.codeVerifier
             }).toString(),
+
             {
                 headers: {
                     "Content-Type":
@@ -258,19 +275,48 @@ app.get("/callback", async (req, res) => {
                 client.guilds.cache.get(
                     DISCORD_GUILD_ID
                 );
-
         }
 
         if (!guild) {
 
             guild =
                 client.guilds.cache.first();
-
         }
 
         if (!guild) {
+
             throw new Error(
                 "Bot não está em nenhum servidor."
+            );
+        }
+
+
+        // ==================================================
+        // ATUALIZAR BOT NO SERVIDOR
+        // ==================================================
+
+        let botMember;
+
+        try {
+
+            botMember =
+                await guild.members.fetchMe();
+
+        } catch (erro) {
+
+            console.error(
+                "❌ Não foi possível atualizar o membro do bot:",
+                erro
+            );
+
+            botMember =
+                guild.members.me;
+        }
+
+        if (!botMember) {
+
+            throw new Error(
+                "Não foi possível localizar o bot no servidor."
             );
         }
 
@@ -285,22 +331,33 @@ app.get("/callback", async (req, res) => {
             );
 
 
+        console.log(
+            "👤 Membro encontrado:",
+            member.user.tag
+        );
+
+        console.log(
+            "🤖 Bot:",
+            botMember.user.tag
+        );
+
+        console.log(
+            "📊 Cargo mais alto do usuário:",
+            member.roles.highest.name,
+            "| posição:",
+            member.roles.highest.position
+        );
+
+        console.log(
+            "📊 Cargo mais alto do bot:",
+            botMember.roles.highest.name,
+            "| posição:",
+            botMember.roles.highest.position
+        );
+
+
         // ==================================================
-        // PEGAR BOT
-        // ==================================================
-
-        const botMember =
-            guild.members.me;
-
-        if (!botMember) {
-            throw new Error(
-                "Não foi possível localizar o bot no servidor."
-            );
-        }
-
-
-        // ==================================================
-        // VERIFICAR PERMISSÕES
+        // VERIFICAR PERMISSÃO DE APELIDO
         // ==================================================
 
         if (
@@ -308,18 +365,25 @@ app.get("/callback", async (req, res) => {
                 PermissionFlagsBits.ManageNicknames
             )
         ) {
+
             throw new Error(
-                "O bot não possui permissão para alterar apelidos."
+                "O bot não possui a permissão Gerenciar apelidos."
             );
         }
+
+
+        // ==================================================
+        // VERIFICAR PERMISSÃO DE CARGOS
+        // ==================================================
 
         if (
             !botMember.permissions.has(
                 PermissionFlagsBits.ManageRoles
             )
         ) {
+
             throw new Error(
-                "O bot não possui permissão para gerenciar cargos."
+                "O bot não possui a permissão Gerenciar cargos."
             );
         }
 
@@ -334,7 +398,11 @@ app.get("/callback", async (req, res) => {
         ) {
 
             throw new Error(
-                "O cargo do usuário está acima ou no mesmo nível do bot."
+                `Hierarquia insuficiente. ` +
+                `Cargo do usuário: "${member.roles.highest.name}" ` +
+                `(posição ${member.roles.highest.position}). ` +
+                `Cargo do bot: "${botMember.roles.highest.name}" ` +
+                `(posição ${botMember.roles.highest.position}).`
             );
         }
 
@@ -343,13 +411,37 @@ app.get("/callback", async (req, res) => {
         // ALTERAR APELIDO
         // ==================================================
 
-        await member.setNickname(
+        console.log(
+            "✏️ Tentando alterar apelido para:",
             robloxUsername
         );
 
+        try {
+
+            await member.setNickname(
+                robloxUsername
+            );
+
+            console.log(
+                "✅ Apelido alterado com sucesso."
+            );
+
+        } catch (erro) {
+
+            console.error(
+                "❌ ERRO AO ALTERAR APELIDO:",
+                erro
+            );
+
+            throw new Error(
+                "Discord recusou a alteração do apelido. " +
+                (erro.message || "Missing Permissions")
+            );
+        }
+
 
         // ==================================================
-        // REMOVER NÃO VERIFICADO
+        // PROCURAR CARGO NÃO VERIFICADO
         // ==================================================
 
         const cargoNaoVerificado =
@@ -359,15 +451,98 @@ app.get("/callback", async (req, res) => {
                     NOME_CARGO_NAO_VERIFICADO
             );
 
-        if (
-            cargoNaoVerificado &&
-            member.roles.cache.has(
-                cargoNaoVerificado.id
-            )
-        ) {
 
-            await member.roles.remove(
-                cargoNaoVerificado
+        // ==================================================
+        // REMOVER NÃO VERIFICADO
+        // ==================================================
+
+        if (cargoNaoVerificado) {
+
+            console.log(
+                "🔎 Cargo encontrado:",
+                cargoNaoVerificado.name
+            );
+
+            console.log(
+                "📊 Posição do cargo:",
+                cargoNaoVerificado.position
+            );
+
+            console.log(
+                "📊 Posição do bot:",
+                botMember.roles.highest.position
+            );
+
+
+            // ----------------------------------------------
+            // VERIFICAR SE O BOT CONSEGUE GERENCIAR O CARGO
+            // ----------------------------------------------
+
+            if (
+                cargoNaoVerificado.position >=
+                botMember.roles.highest.position
+            ) {
+
+                console.error(
+                    "❌ O cargo Não verificado está acima ou no mesmo nível do bot."
+                );
+
+                throw new Error(
+                    `O cargo "${NOME_CARGO_NAO_VERIFICADO}" ` +
+                    `está acima ou no mesmo nível do cargo do bot. ` +
+                    `Mova o cargo do bot para cima dele.`
+                );
+            }
+
+
+            // ----------------------------------------------
+            // VERIFICAR SE MEMBRO POSSUI O CARGO
+            // ----------------------------------------------
+
+            if (
+                member.roles.cache.has(
+                    cargoNaoVerificado.id
+                )
+            ) {
+
+                console.log(
+                    "🔒 Removendo cargo Não verificado..."
+                );
+
+                try {
+
+                    await member.roles.remove(
+                        cargoNaoVerificado
+                    );
+
+                    console.log(
+                        "✅ Cargo Não verificado removido."
+                    );
+
+                } catch (erro) {
+
+                    console.error(
+                        "❌ ERRO AO REMOVER CARGO:",
+                        erro
+                    );
+
+                    throw new Error(
+                        "O apelido foi alterado, mas o Discord recusou a remoção do cargo Não verificado. " +
+                        (erro.message || "Missing Permissions")
+                    );
+                }
+
+            } else {
+
+                console.log(
+                    "ℹ️ Usuário não possui o cargo Não verificado."
+                );
+            }
+
+        } else {
+
+            console.log(
+                `ℹ️ Cargo "${NOME_CARGO_NAO_VERIFICADO}" não encontrado.`
             );
         }
 
@@ -376,18 +551,29 @@ app.get("/callback", async (req, res) => {
         // SUCESSO
         // ==================================================
 
+        console.log(
+            "🎉 VERIFICAÇÃO CONCLUÍDA COM SUCESSO!"
+        );
+
         res.send(`
             <html>
+
                 <head>
+
                     <meta charset="UTF-8">
 
+                    <meta name="viewport"
+                          content="width=device-width, initial-scale=1.0">
+
                     <style>
+
                         body {
                             font-family: Arial;
                             text-align: center;
                             margin-top: 80px;
                             background: #111;
                             color: white;
+                            padding: 20px;
                         }
 
                         .box {
@@ -397,14 +583,22 @@ app.get("/callback", async (req, res) => {
                             max-width: 500px;
                             margin: auto;
                         }
+
+                        h1 {
+                            color: #00ff88;
+                        }
+
                     </style>
+
                 </head>
 
                 <body>
 
                     <div class="box">
 
-                        <h1>✅ Verificação concluída!</h1>
+                        <h1>
+                            ✅ Verificação concluída!
+                        </h1>
 
                         <p>
                             Sua conta Roblox foi vinculada ao Discord.
@@ -422,31 +616,75 @@ app.get("/callback", async (req, res) => {
                     </div>
 
                 </body>
+
             </html>
         `);
 
     } catch (erro) {
 
         console.error(
-            "❌ Erro no callback:",
+            "❌ ERRO COMPLETO NO CALLBACK:",
             erro
+        );
+
+        console.error(
+            "❌ Mensagem:",
+            erro.message
         );
 
         res.status(500).send(`
             <html>
+
                 <head>
+
                     <meta charset="UTF-8">
+
+                    <meta name="viewport"
+                          content="width=device-width, initial-scale=1.0">
+
+                    <style>
+
+                        body {
+                            font-family: Arial;
+                            text-align: center;
+                            margin-top: 60px;
+                            background: #111;
+                            color: white;
+                            padding: 20px;
+                        }
+
+                        .box {
+                            background: #222;
+                            padding: 30px;
+                            border-radius: 15px;
+                            max-width: 600px;
+                            margin: auto;
+                        }
+
+                        .erro {
+                            color: #ff5555;
+                        }
+
+                    </style>
+
                 </head>
 
                 <body>
 
-                    <h2>❌ Erro ao concluir a verificação.</h2>
+                    <div class="box">
 
-                    <p>
-                        ${erro.message}
-                    </p>
+                        <h2 class="erro">
+                            ❌ Erro ao concluir a verificação.
+                        </h2>
+
+                        <p>
+                            ${erro.message}
+                        </p>
+
+                    </div>
 
                 </body>
+
             </html>
         `);
     }
@@ -472,7 +710,6 @@ setInterval(() => {
         ) {
 
             sessoesOAuth.delete(state);
-
         }
     }
 
@@ -963,17 +1200,20 @@ client.on(
                         NOME_CARGO_NAO_VERIFICADO
                 );
 
+            const botMember =
+                member.guild.members.me;
+
             if (
                 cargo &&
-                member.guild.members.me
-                    .permissions.has(
-                        PermissionFlagsBits.ManageRoles
-                    )
+                botMember &&
+                botMember.permissions.has(
+                    PermissionFlagsBits.ManageRoles
+                )
             ) {
 
                 if (
                     cargo.position <
-                    member.guild.members.me.roles.highest.position
+                    botMember.roles.highest.position
                 ) {
 
                     await member.roles.add(
