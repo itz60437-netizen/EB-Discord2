@@ -24,7 +24,6 @@ const PORT = process.env.PORT || 3000;
 
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
 const DISCORD_CLIENT_ID = process.env.DISCORD_CLIENT_ID;
-const DISCORD_GUILD_ID = process.env.DISCORD_GUILD_ID;
 
 const NOME_CARGO_NAO_VERIFICADO = "Não verificado";
 
@@ -50,7 +49,7 @@ const ROBLOX_UNIVERSE_ID = "9875022038";
 const ROBLOX_DATASTORE = "EB_SISTEMA_V1";
 
 const ROBLOX_CLOUD_BASE =
-    "https://apis.roblox.com/cloud/v2";
+    "https://apis.roblox.com/cloud/v2/";
 
 // ======================================================
 // EXPRESS
@@ -323,51 +322,37 @@ function normalizar(texto) {
 const PATENTES = [
 
     "Civil",
-
     "Recruta",
-
     "Soldado",
-
     "Cabo",
 
     "3º Sargento",
-
     "2º Sargento",
-
     "1º Sargento",
 
     "Subtenente",
-
     "Cadete",
 
     "Aspirante a Oficial",
 
     "2º Tenente",
-
     "1º Tenente",
 
     "Capitão",
-
     "Major",
 
     "Tenente-Coronel",
-
     "Coronel",
 
     "General de Brigada",
-
     "General de Divisão",
-
     "General de Exército",
 
     "Elite Militar",
-
     "Elite Secreta",
-
     "Elite Real",
 
     "Subcomandante",
-
     "Comandante"
 
 ];
@@ -460,8 +445,6 @@ async function aplicarPatente(
 
     try {
 
-        // Remover cargos antigos de patente
-
         for (
             const role
             of member.roles.cache.values()
@@ -491,8 +474,6 @@ async function aplicarPatente(
             }
 
         }
-
-        // Adicionar nova patente
 
         if (
             !member.roles.cache.has(
@@ -621,8 +602,6 @@ async function alterarNickname(
 
     }
 
-    // Dono do servidor
-
     if (
         member.id ===
         guild.ownerId
@@ -635,8 +614,6 @@ async function alterarNickname(
 
     }
 
-    // Permissão
-
     if (
         !botMember.permissions.has(
             PermissionFlagsBits.ManageNicknames
@@ -648,8 +625,6 @@ async function alterarNickname(
         );
 
     }
-
-    // Hierarquia
 
     if (
         member.roles.highest.position >=
@@ -666,6 +641,46 @@ async function alterarNickname(
         robloxUsername,
         "Verificação da conta Roblox"
     );
+
+}
+
+// ======================================================
+// ENCONTRAR SERVIDOR DO USUÁRIO
+// ======================================================
+
+async function encontrarServidorDoUsuario(
+    discordId
+) {
+
+    for (
+        const guild
+        of client.guilds.cache.values()
+    ) {
+
+        try {
+
+            const member =
+                await guild.members.fetch(
+                    discordId
+                );
+
+            if (member) {
+
+                return {
+                    guild,
+                    member
+                };
+
+            }
+
+        } catch (erro) {
+
+            // Usuário não está neste servidor
+        }
+
+    }
+
+    return null;
 
 }
 
@@ -932,22 +947,37 @@ app.get(
             );
 
             // ==========================================
-            // SERVIDOR
+            // ENCONTRAR SERVIDOR AUTOMATICAMENTE
             // ==========================================
 
-            const guild =
-                await client.guilds.fetch(
-                    DISCORD_GUILD_ID
-                );
-
-            // ==========================================
-            // MEMBRO
-            // ==========================================
-
-            const member =
-                await guild.members.fetch(
+            const resultadoServidor =
+                await encontrarServidorDoUsuario(
                     sessao.discordId
                 );
+
+            if (!resultadoServidor) {
+
+                throw new Error(
+                    "Não encontrei você em nenhum servidor onde o bot está."
+                );
+
+            }
+
+            const guild =
+                resultadoServidor.guild;
+
+            const member =
+                resultadoServidor.member;
+
+            console.log(
+                "[DISCORD] Servidor encontrado:",
+                guild.name
+            );
+
+            console.log(
+                "[DISCORD] Membro encontrado:",
+                member.user.tag
+            );
 
             // ==========================================
             // DATASTORE
@@ -1728,11 +1758,15 @@ client.once(
                     DISCORD_TOKEN
                 );
 
+            // ==========================================
+            // COMANDOS GLOBAIS
+            // NÃO USA MAIS DISCORD_GUILD_ID
+            // ==========================================
+
             await rest.put(
 
-                Routes.applicationGuildCommands(
-                    DISCORD_CLIENT_ID,
-                    DISCORD_GUILD_ID
+                Routes.applicationCommands(
+                    DISCORD_CLIENT_ID
                 ),
 
                 {
@@ -1742,7 +1776,7 @@ client.once(
             );
 
             console.log(
-                "✅ Comandos registrados."
+                "✅ Comandos globais registrados."
             );
 
         } catch (erro) {
@@ -1873,7 +1907,6 @@ client.on(
 
             // ==========================================
             // PAINEL VERIFICAR
-            // LIBERADO PARA TODO MUNDO
             // ==========================================
 
             if (
@@ -2111,6 +2144,19 @@ client.on(
                     interaction.options.getString(
                         "cargo"
                     );
+
+                if (!alvo) {
+
+                    return interaction.reply({
+
+                        content:
+                            "❌ Usuário não encontrado.",
+
+                        ephemeral: true
+
+                    });
+
+                }
 
                 if (
                     !isCGEX(
