@@ -7,266 +7,135 @@ const {
     ActionRowBuilder,
     ButtonBuilder,
     ButtonStyle,
-    EmbedBuilder
+    EmbedBuilder,
+    REST
 } = require("discord.js");
 
-const { REST } = require("@discordjs/rest");
 const express = require("express");
-const crypto = require("crypto");
 const axios = require("axios");
-require("dotenv").config();
-
-// ======================================================
-// CONFIGURAÇÕES
-// ======================================================
-
-const PORT = process.env.PORT || 3000;
-
-const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
-
-const NOME_CARGO_NAO_VERIFICADO = "Não verificado";
-
-// ======================================================
-// ROBLOX OAUTH
-// ======================================================
-
-const ROBLOX_CLIENT_ID =
-    process.env.ROBLOX_CLIENT_ID;
-
-const ROBLOX_CLIENT_SECRET =
-    process.env.ROBLOX_CLIENT_SECRET;
-
-const ROBLOX_REDIRECT_URI =
-    process.env.ROBLOX_REDIRECT_URI ||
-    "https://eb-discord.onrender.com/callback";
-
-// ======================================================
-// ROBLOX OPEN CLOUD
-// ======================================================
-
-const ROBLOX_API_KEY =
-    process.env.ROBLOX_API_KEY;
-
-const ROBLOX_UNIVERSE_ID =
-    "9875022038";
-
-const ROBLOX_DATASTORE =
-    "EB_SISTEMA_V1";
-
-const ROBLOX_CLOUD_BASE =
-    "https://apis.roblox.com/cloud/v2/";
-
-// ======================================================
-// EXPRESS
-// ======================================================
+const crypto = require("crypto");
 
 const app = express();
 
 app.use(express.json());
 
-app.get("/", (req, res) => {
+/* =========================================================
+   CONFIGURAÇÕES
+========================================================= */
 
-    res.send(`
-        <html>
+const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
 
-        <head>
-            <meta charset="UTF-8">
-            <title>EB Discord</title>
-        </head>
+const ROBLOX_CLIENT_ID = process.env.ROBLOX_CLIENT_ID;
+const ROBLOX_CLIENT_SECRET = process.env.ROBLOX_CLIENT_SECRET;
 
-        <body style="
-            background:#111;
-            color:white;
-            font-family:Arial;
-            text-align:center;
-            padding-top:80px;
-        ">
+const ROBLOX_REDIRECT_URI =
+    process.env.ROBLOX_REDIRECT_URI ||
+    "https://eb-discord.onrender.com/callback";
 
-            <h1>🇧🇷 EB Discord Online</h1>
+const ROBLOX_API_KEY = process.env.ROBLOX_API_KEY;
 
-            <p>Sistema funcionando.</p>
+const ROBLOX_UNIVERSE_ID = "9875022038";
 
-        </body>
+const ROBLOX_DATASTORE = "EB_SISTEMA_V1";
 
-        </html>
-    `);
+const PORT = process.env.PORT || 10000;
 
+/* =========================================================
+   CLIENT DISCORD
+========================================================= */
+
+const client = new Client({
+    intents: [
+        GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildMembers
+    ]
 });
 
-// ======================================================
-// SESSÕES OAUTH
-// ======================================================
+/* =========================================================
+   PATENTES
+========================================================= */
 
-const sessoesOAuth = new Map();
+const PATENTES = [
+    "Civil",
+    "Recruta",
+    "Soldado",
+    "Cabo",
+    "3º Sargento",
+    "2º Sargento",
+    "1º Sargento",
+    "Subtenente",
+    "Cadete",
+    "Aspirante a Oficial",
+    "2º Tenente",
+    "1º Tenente",
+    "Capitão",
+    "Major",
+    "Tenente-Coronel",
+    "Coronel",
+    "General de Brigada",
+    "General de Divisão",
+    "General de Exército",
+    "Elite Militar",
+    "Elite Secreta",
+    "Elite Real",
+    "Subcomandante",
+    "Comandante"
+];
 
-function gerarState() {
+/* =========================================================
+   SIGLAS DAS PATENTES
+========================================================= */
 
-    return crypto
-        .randomBytes(32)
-        .toString("hex");
+const SIGLAS_PATENTES = {
+    "Civil": "CV",
+    "Recruta": "REC",
+    "Soldado": "SLD",
+    "Cabo": "CB",
+    "3º Sargento": "3SGT",
+    "2º Sargento": "2SGT",
+    "1º Sargento": "1SGT",
+    "Subtenente": "SBT",
+    "Cadete": "CD",
+    "Aspirante a Oficial": "AAO",
+    "2º Tenente": "2TEN",
+    "1º Tenente": "1TEN",
+    "Capitão": "CAP",
+    "Major": "MAJ",
+    "Tenente-Coronel": "TCEL",
+    "Coronel": "CEL",
+    "General de Brigada": "GDB",
+    "General de Divisão": "GDD",
+    "General de Exército": "GDE",
+    "Elite Militar": "EM",
+    "Elite Secreta": "ES",
+    "Elite Real": "ER",
+    "Subcomandante": "SUBCMT",
+    "Comandante": "CMT"
+};
 
+/* =========================================================
+   NORMALIZAR TEXTO
+========================================================= */
+
+function normalizarTexto(texto) {
+    return String(texto || "")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase()
+        .trim();
 }
 
-function gerarCodeVerifier() {
-
-    return crypto
-        .randomBytes(64)
-        .toString("base64url");
-
-}
-
-function gerarCodeChallenge(verifier) {
-
-    return crypto
-        .createHash("sha256")
-        .update(verifier)
-        .digest("base64url");
-
-}
-
-// ======================================================
-// DATASTORE ROBLOX
-// ======================================================
-
-async function buscarDadosRoblox(userId) {
-
-    if (!ROBLOX_API_KEY) {
-
-        throw new Error(
-            "ROBLOX_API_KEY não configurada no Render."
-        );
-
-    }
-
-    const chave =
-        encodeURIComponent(
-            String(userId)
-        );
-
-    const url =
-        `${ROBLOX_CLOUD_BASE}` +
-        `universes/${ROBLOX_UNIVERSE_ID}` +
-        `/data-stores/${encodeURIComponent(ROBLOX_DATASTORE)}` +
-        `/entries/${chave}`;
-
-    console.log(
-        "[ROBLOX DATASTORE] Consultando:",
-        url
-    );
-
-    const resposta =
-        await axios.get(
-            url,
-            {
-                headers: {
-                    "x-api-key":
-                        ROBLOX_API_KEY
-                },
-
-                validateStatus:
-                    () => true
-            }
-        );
-
-    console.log(
-        "[ROBLOX DATASTORE] Status:",
-        resposta.status
-    );
-
-    if (resposta.status === 404) {
-
-        console.log(
-            "[ROBLOX DATASTORE] Registro não encontrado."
-        );
-
-        return null;
-
-    }
-
-    if (
-        resposta.status === 401 ||
-        resposta.status === 403
-    ) {
-
-        console.error(
-            "[ROBLOX DATASTORE] API Key recusada:",
-            resposta.data
-        );
-
-        throw new Error(
-            "Roblox recusou a API Key. " +
-            "Verifique as permissões do DataStore."
-        );
-
-    }
-
-    if (resposta.status >= 400) {
-
-        console.error(
-            "[ROBLOX DATASTORE] Resposta:",
-            resposta.data
-        );
-
-        throw new Error(
-            `Roblox DataStore retornou HTTP ${resposta.status}: ` +
-            JSON.stringify(resposta.data)
-        );
-
-    }
-
-    let valor =
-        resposta.data?.value;
-
-    if (
-        typeof valor === "string"
-    ) {
-
-        try {
-
-            valor =
-                JSON.parse(valor);
-
-        } catch (erro) {
-
-            console.log(
-                "[ROBLOX DATASTORE] Valor não é JSON."
-            );
-
-        }
-
-    }
-
-    if (
-        !valor ||
-        typeof valor !== "object"
-    ) {
-
-        console.log(
-            "[ROBLOX DATASTORE] Valor vazio ou inválido."
-        );
-
-        return null;
-
-    }
-
-    console.log(
-        "[ROBLOX DATASTORE] Dados encontrados."
-    );
-
-    return valor;
-
-}
-
-// ======================================================
-// PEGAR PATENTE
-// ======================================================
+/* =========================================================
+   OBTER PATENTE
+========================================================= */
 
 function obterPatente(dados) {
-
     if (!dados) {
-
         return "Civil";
+    }
 
+    if (typeof dados === "string") {
+        return dados;
     }
 
     return (
@@ -276,19 +145,19 @@ function obterPatente(dados) {
         dados.rank ||
         "Civil"
     );
-
 }
 
-// ======================================================
-// PEGAR DIVISÃO
-// ======================================================
+/* =========================================================
+   OBTER DIVISÃO
+========================================================= */
 
 function obterDivisao(dados) {
-
     if (!dados) {
+        return "Civis";
+    }
 
-        return "Civil";
-
+    if (typeof dados === "string") {
+        return "Civis";
     }
 
     return (
@@ -296,517 +165,416 @@ function obterDivisao(dados) {
         dados.divisao ||
         dados.Division ||
         dados.division ||
-        "Civil"
+        "Civis"
     );
-
 }
 
-// ======================================================
-// PEGAR CARGO DA DIVISÃO
-// ======================================================
+/* =========================================================
+   OBTER CARGO DA DIVISÃO
+========================================================= */
 
 function obterCargoDivisao(dados) {
-
-    if (!dados) {
-
+    if (!dados || typeof dados === "string") {
         return "";
-
     }
 
     return (
         dados.CargoDivisao ||
         dados.cargoDivisao ||
         dados.CargoCIE ||
-        dados.cargoCIE ||
         dados.CargoBIP ||
-        dados.cargoBIP ||
         dados.CargoBAC ||
-        dados.cargoBAC ||
-        dados.Cargo ||
-        dados.cargo ||
         ""
     );
-
 }
 
-// ======================================================
-// NORMALIZAR
-// ======================================================
+/* =========================================================
+   ROBLOX DATASTORE
+========================================================= */
 
-function normalizar(texto) {
+async function buscarDadosRoblox(userId) {
+    try {
+        const url =
+            `https://apis.roblox.com/cloud/v2/universes/` +
+            `${ROBLOX_UNIVERSE_ID}/data-stores/` +
+            `${encodeURIComponent(ROBLOX_DATASTORE)}/entries/` +
+            `${encodeURIComponent(String(userId))}`;
 
-    return String(texto || "")
-        .normalize("NFD")
-        .replace(
-            /[\u0300-\u036f]/g,
-            ""
-        )
-        .toLowerCase()
-        .trim();
+        console.log("");
+        console.log("[ROBLOX DATASTORE]");
+        console.log("Consultando:", url);
 
+        const resposta = await axios.get(url, {
+            headers: {
+                "x-api-key": ROBLOX_API_KEY
+            },
+            validateStatus: () => true
+        });
+
+        console.log("Status:", resposta.status);
+
+        if (resposta.status !== 200) {
+            console.log("Resposta:", resposta.data);
+            return null;
+        }
+
+        return resposta.data;
+    } catch (erro) {
+        console.log(
+            "[ROBLOX DATASTORE] Erro:",
+            erro.response?.data || erro.message
+        );
+
+        return null;
+    }
 }
 
-// ======================================================
-// PATENTES
-// ======================================================
+/* =========================================================
+   ENCONTRAR SERVIDOR DO USUÁRIO
+========================================================= */
 
-const PATENTES = [
+async function encontrarServidorDoUsuario(discordId) {
+    for (const guild of client.guilds.cache.values()) {
+        try {
+            const member = await guild.members.fetch(discordId);
 
-    "Civil",
-    "Recruta",
-    "Soldado",
-    "Cabo",
+            if (member) {
+                return {
+                    guild,
+                    member
+                };
+            }
+        } catch (erro) {
+            // Usuário não está neste servidor
+        }
+    }
 
-    "3º Sargento",
-    "2º Sargento",
-    "1º Sargento",
+    return null;
+}
 
-    "Subtenente",
-    "Cadete",
+/* =========================================================
+   ALTERAR NICKNAME
+========================================================= */
 
-    "Aspirante a Oficial",
-
-    "2º Tenente",
-    "1º Tenente",
-
-    "Capitão",
-    "Major",
-
-    "Tenente-Coronel",
-    "Coronel",
-
-    "General de Brigada",
-    "General de Divisão",
-    "General de Exército",
-
-    "Elite Militar",
-    "Elite Secreta",
-    "Elite Real",
-
-    "Subcomandante",
-    "Comandante"
-
-];
-
-// ======================================================
-// ENCONTRAR CARGO
-// ======================================================
-
-function encontrarCargo(
+async function alterarNickname(
     guild,
-    nome
+    member,
+    robloxUsername,
+    patente
 ) {
+    try {
+        if (!guild || !member) {
+            return false;
+        }
 
-    const normalizado =
-        normalizar(nome);
+        /*
+            O dono do servidor não pode ter o nickname
+            alterado pelo bot.
+        */
 
-    return guild.roles.cache.find(
-        role =>
-            normalizar(role.name) ===
-            normalizado
-    );
+        if (member.id === guild.ownerId) {
+            console.log(
+                "[NICKNAME] Usuário é o dono do servidor."
+            );
 
+            return false;
+        }
+
+        /*
+            Verifica permissão do bot
+        */
+
+        const botMember = guild.members.me;
+
+        if (!botMember) {
+            console.log(
+                "[NICKNAME] Não consegui encontrar o bot."
+            );
+
+            return false;
+        }
+
+        if (!botMember.permissions.has(
+            PermissionFlagsBits.ManageNicknames
+        )) {
+            console.log(
+                "[NICKNAME] Bot não possui Manage Nicknames."
+            );
+
+            return false;
+        }
+
+        /*
+            Verifica hierarquia
+        */
+
+        if (
+            member.roles.highest.position >=
+            botMember.roles.highest.position
+        ) {
+            console.log(
+                "[NICKNAME] O cargo do usuário está acima ou igual ao bot."
+            );
+
+            return false;
+        }
+
+        /*
+            Descobre a sigla
+        */
+
+        const sigla =
+            SIGLAS_PATENTES[patente] || "CV";
+
+        /*
+            FORMATO FINAL:
+
+            [CV]Joao123
+            [AAO]Joao123
+            [GDE]Joao123
+        */
+
+        const novoNickname =
+            `[${sigla}]${robloxUsername}`;
+
+        await member.setNickname(
+            novoNickname,
+            "Verificação da conta Roblox"
+        );
+
+        console.log(
+            "[NICKNAME] Alterado para:",
+            novoNickname
+        );
+
+        return true;
+
+    } catch (erro) {
+        console.log(
+            "[NICKNAME] Erro:",
+            erro.message
+        );
+
+        return false;
+    }
 }
 
-// ======================================================
-// APLICAR PATENTE
-// ======================================================
+/* =========================================================
+   APLICAR CARGO DA PATENTE
+========================================================= */
 
 async function aplicarPatente(
     guild,
     member,
     patente
 ) {
-
-    const cargo =
-        encontrarCargo(
-            guild,
-            patente
-        );
-
-    if (!cargo) {
-
-        console.log(
-            `[CARGO] Cargo "${patente}" não existe.`
-        );
-
-        return {
-
-            sucesso: false,
-
-            mensagem:
-                `O cargo **${patente}** não existe no servidor.`
-
-        };
-
-    }
-
-    const botMember =
-        guild.members.me;
-
-    if (!botMember) {
-
-        return {
-
-            sucesso: false,
-
-            mensagem:
-                "Não consegui localizar o próprio bot."
-
-        };
-
-    }
-
-    if (
-        cargo.position >=
-        botMember.roles.highest.position
-    ) {
-
-        return {
-
-            sucesso: false,
-
-            mensagem:
-                `Não consigo colocar o cargo **${cargo.name}** ` +
-                `porque ele está acima ou no mesmo nível do meu cargo.`
-
-        };
-
-    }
-
     try {
-
-        for (
-            const role
-            of member.roles.cache.values()
-        ) {
-
-            if (
-                role.id !== guild.id &&
-                PATENTES.some(
-                    patenteNome =>
-                        normalizar(role.name) ===
-                        normalizar(patenteNome)
-                )
-            ) {
-
-                if (
-                    role.position <
-                    botMember.roles.highest.position
-                ) {
-
-                    await member.roles.remove(
-                        role,
-                        "Atualização da patente EB"
-                    );
-
-                }
-
-            }
-
+        if (!guild || !member) {
+            return false;
         }
 
-        if (
-            !member.roles.cache.has(
-                cargo.id
-            )
-        ) {
+        const nomePatenteNormalizado =
+            normalizarTexto(patente);
 
-            await member.roles.add(
-                cargo,
-                "Patente obtida pelo DataStore Roblox"
+        /*
+            Procura o cargo da patente
+        */
+
+        const cargoPatente =
+            guild.roles.cache.find(
+                role =>
+                    normalizarTexto(role.name) ===
+                    nomePatenteNormalizado
             );
 
+        if (!cargoPatente) {
+            console.log(
+                "[CARGO] Cargo da patente não encontrado:",
+                patente
+            );
+
+            return false;
         }
 
-        return {
+        const botMember = guild.members.me;
 
-            sucesso: true,
+        if (!botMember) {
+            return false;
+        }
 
-            mensagem:
-                `Cargo **${cargo.name}** aplicado.`
-
-        };
-
-    } catch (erro) {
-
-        console.error(
-            "[CARGO] Erro:",
-            erro
-        );
-
-        return {
-
-            sucesso: false,
-
-            mensagem:
-                "Não consegui alterar os cargos. " +
-                "Verifique Gerenciar Cargos e a hierarquia."
-
-        };
-
-    }
-
-}
-
-// ======================================================
-// REMOVER NÃO VERIFICADO
-// ======================================================
-
-async function removerNaoVerificado(
-    guild,
-    member
-) {
-
-    const cargo =
-        guild.roles.cache.find(
-            role =>
-                normalizar(role.name) ===
-                normalizar(
-                    NOME_CARGO_NAO_VERIFICADO
-                )
-        );
-
-    if (!cargo) {
-
-        return;
-
-    }
-
-    if (
-        !member.roles.cache.has(
-            cargo.id
-        )
-    ) {
-
-        return;
-
-    }
-
-    try {
-
-        const botMember =
-            guild.members.me;
+        /*
+            Verifica hierarquia
+        */
 
         if (
-            botMember &&
-            cargo.position <
+            cargoPatente.position >=
             botMember.roles.highest.position
         ) {
-
-            await member.roles.remove(
-                cargo,
-                "Jogador verificado pelo Roblox"
+            console.log(
+                "[CARGO] Cargo está acima do bot:",
+                cargoPatente.name
             );
 
+            return false;
         }
 
-    } catch (erro) {
+        /*
+            Remove cargos antigos de patente
+        */
 
-        console.error(
-            "[VERIFICAÇÃO] Erro ao remover Não verificado:",
-            erro
-        );
+        for (const cargo of guild.roles.cache.values()) {
+            const nomeNormalizado =
+                normalizarTexto(cargo.name);
 
-    }
-
-}
-
-// ======================================================
-// ALTERAR NICKNAME
-// ======================================================
-
-async function alterarNickname(
-    guild,
-    member,
-    robloxUsername
-) {
-
-    const botMember =
-        guild.members.me;
-
-    if (!botMember) {
-
-        throw new Error(
-            "Não consegui localizar o bot no servidor."
-        );
-
-    }
-
-    if (
-        member.id ===
-        guild.ownerId
-    ) {
-
-        throw new Error(
-            "A conta testada é a dona do servidor. " +
-            "Teste com outra conta Discord."
-        );
-
-    }
-
-    if (
-        !botMember.permissions.has(
-            PermissionFlagsBits.ManageNicknames
-        )
-    ) {
-
-        throw new Error(
-            "O bot não possui a permissão Gerenciar Apelidos."
-        );
-
-    }
-
-    if (
-        member.roles.highest.position >=
-        botMember.roles.highest.position
-    ) {
-
-        throw new Error(
-            "O cargo mais alto desse membro está acima ou no mesmo nível do cargo do bot."
-        );
-
-    }
-
-    await member.setNickname(
-        robloxUsername,
-        "Verificação da conta Roblox"
-    );
-
-}
-
-// ======================================================
-// ENCONTRAR SERVIDOR DO USUÁRIO
-// ======================================================
-
-async function encontrarServidorDoUsuario(
-    discordId
-) {
-
-    for (
-        const guild
-        of client.guilds.cache.values()
-    ) {
-
-        try {
-
-            const member =
-                await guild.members.fetch(
-                    discordId
+            const ehPatente =
+                PATENTES.some(
+                    p =>
+                        normalizarTexto(p) ===
+                        nomeNormalizado
                 );
 
-            if (member) {
-
-                return {
-                    guild,
-                    member
-                };
-
+            if (
+                ehPatente &&
+                member.roles.cache.has(cargo.id)
+            ) {
+                if (
+                    cargo.id !== cargoPatente.id &&
+                    cargo.position <
+                        botMember.roles.highest.position
+                ) {
+                    try {
+                        await member.roles.remove(
+                            cargo,
+                            "Atualização da patente Roblox"
+                        );
+                    } catch (erro) {
+                        console.log(
+                            "[CARGO] Não consegui remover:",
+                            cargo.name
+                        );
+                    }
+                }
             }
-
-        } catch (erro) {
-
-            // Usuário não está neste servidor.
         }
 
-    }
+        /*
+            Adiciona cargo correto
+        */
 
-    return null;
-
-}
-
-// ======================================================
-// AUTH
-// ======================================================
-
-app.get(
-    "/auth",
-    (req, res) => {
-
-        const discordId =
-            req.query.discord;
-
-        if (!discordId) {
-
-            return res.status(400).send(
-                "Discord ID não informado."
+        if (!member.roles.cache.has(cargoPatente.id)) {
+            await member.roles.add(
+                cargoPatente,
+                "Patente obtida do Roblox"
             );
-
         }
 
-        if (
-            !ROBLOX_CLIENT_ID ||
-            !ROBLOX_CLIENT_SECRET
-        ) {
-
-            return res.status(500).send(
-                "ROBLOX_CLIENT_ID ou ROBLOX_CLIENT_SECRET não configurado."
-            );
-
-        }
-
-        const state =
-            gerarState();
-
-        const codeVerifier =
-            gerarCodeVerifier();
-
-        const codeChallenge =
-            gerarCodeChallenge(
-                codeVerifier
-            );
-
-        sessoesOAuth.set(
-            state,
-            {
-                discordId,
-                codeVerifier,
-                criadoEm: Date.now()
-            }
+        console.log(
+            "[CARGO] Patente aplicada:",
+            cargoPatente.name
         );
 
-        const params =
-            new URLSearchParams({
+        return true;
 
-                client_id:
-                    ROBLOX_CLIENT_ID,
+    } catch (erro) {
+        console.log(
+            "[CARGO] Erro:",
+            erro.message
+        );
 
-                redirect_uri:
-                    ROBLOX_REDIRECT_URI,
+        return false;
+    }
+}
 
-                scope:
-                    "openid profile",
+/* =========================================================
+   OAUTH
+========================================================= */
 
-                response_type:
-                    "code",
+const estadosOAuth = new Map();
 
-                state,
+/* =========================================================
+   GERAR STATE
+========================================================= */
 
-                code_challenge:
-                    codeChallenge,
+function gerarState() {
+    return crypto.randomBytes(32).toString("hex");
+}
 
-                code_challenge_method:
-                    "S256"
+/* =========================================================
+   GERAR PKCE
+========================================================= */
 
-            });
+function gerarCodeVerifier() {
+    return crypto
+        .randomBytes(64)
+        .toString("base64url");
+}
+
+function gerarCodeChallenge(verifier) {
+    return crypto
+        .createHash("sha256")
+        .update(verifier)
+        .digest("base64url");
+}
+
+/* =========================================================
+   ROTA AUTH
+========================================================= */
+
+app.get("/auth", (req, res) => {
+    try {
+        const discordId = req.query.discord;
+
+        if (!discordId) {
+            return res.status(400).send(
+                "Discord não informado."
+            );
+        }
+
+        const state = gerarState();
+        const codeVerifier = gerarCodeVerifier();
+        const codeChallenge =
+            gerarCodeChallenge(codeVerifier);
+
+        estadosOAuth.set(state, {
+            discordId,
+            codeVerifier,
+            criadoEm: Date.now()
+        });
+
+        const parametros = new URLSearchParams({
+            client_id: ROBLOX_CLIENT_ID,
+            redirect_uri: ROBLOX_REDIRECT_URI,
+            response_type: "code",
+            scope: "openid profile",
+            state,
+            code_challenge: codeChallenge,
+            code_challenge_method: "S256"
+        });
 
         const url =
             "https://apis.roblox.com/oauth/v1/authorize?" +
-            params.toString();
+            parametros.toString();
 
         res.redirect(url);
 
+    } catch (erro) {
+        console.log(
+            "[AUTH] Erro:",
+            erro.message
+        );
+
+        res.status(500).send(
+            "Erro ao iniciar autenticação."
+        );
     }
-);
+});
 
-// ======================================================
-// CALLBACK
-// ======================================================
+/* =========================================================
+   CALLBACK
+========================================================= */
 
-app.get(
-    "/callback",
-    async (req, res) => {
-
+app.get("/callback", async (req, res) => {
+    try {
         const {
             code,
             state,
@@ -815,611 +583,611 @@ app.get(
         } = req.query;
 
         if (error) {
-
-            return res.status(400).send(`
-                <html>
-                <body style="
-                    font-family:Arial;
-                    text-align:center;
-                    padding:50px
-                ">
-
-                    <h1>❌ Autorização cancelada</h1>
-
-                    <p>
-                        ${error_description || error}
-                    </p>
-
-                </body>
-                </html>
-            `);
-
+            return res.status(400).send(
+                `Erro Roblox: ${error_description || error}`
+            );
         }
 
-        if (
-            !code ||
-            !state
-        ) {
-
+        if (!code || !state) {
             return res.status(400).send(
                 "Código ou state não informado."
             );
-
         }
 
-        const sessao =
-            sessoesOAuth.get(
-                state
-            );
+        const dadosState =
+            estadosOAuth.get(state);
 
-        if (!sessao) {
-
+        if (!dadosState) {
             return res.status(400).send(
-                "Sessão inválida ou expirada."
+                "Sessão de autenticação inválida ou expirada."
             );
-
         }
 
-        sessoesOAuth.delete(
-            state
+        estadosOAuth.delete(state);
+
+        /*
+            Trocar code pelo token
+        */
+
+        const tokenResposta =
+            await axios.post(
+                "https://apis.roblox.com/oauth/v1/token",
+                new URLSearchParams({
+                    grant_type: "authorization_code",
+                    code,
+                    client_id: ROBLOX_CLIENT_ID,
+                    client_secret: ROBLOX_CLIENT_SECRET,
+                    redirect_uri: ROBLOX_REDIRECT_URI,
+                    code_verifier: dadosState.codeVerifier
+                }).toString(),
+                {
+                    headers: {
+                        "Content-Type":
+                            "application/x-www-form-urlencoded"
+                    }
+                }
+            );
+
+        const accessToken =
+            tokenResposta.data.access_token;
+
+        if (!accessToken) {
+            return res.status(400).send(
+                "Roblox não retornou o access token."
+            );
+        }
+
+        /*
+            Buscar usuário Roblox
+        */
+
+        const userResposta =
+            await axios.get(
+                "https://apis.roblox.com/oauth/v1/userinfo",
+                {
+                    headers: {
+                        Authorization:
+                            `Bearer ${accessToken}`
+                    }
+                }
+            );
+
+        const robloxUser =
+            userResposta.data;
+
+        const robloxUsername =
+            robloxUser.preferred_username ||
+            robloxUser.name ||
+            robloxUser.nickname;
+
+        const robloxUserId =
+            robloxUser.sub;
+
+        console.log("");
+        console.log(
+            "[ROBLOX OAUTH]",
+            robloxUsername,
+            robloxUserId
         );
 
-        if (
-            Date.now() -
-            sessao.criadoEm >
-            10 * 60 * 1000
-        ) {
-
+        if (!robloxUsername || !robloxUserId) {
             return res.status(400).send(
-                "Sessão expirada."
+                "Não foi possível identificar sua conta Roblox."
             );
-
         }
 
-        try {
+        /*
+            Encontrar usuário no Discord
+        */
 
-            // ==========================================
-            // TOKEN
-            // ==========================================
-
-            const tokenParams =
-                new URLSearchParams();
-
-            tokenParams.append(
-                "client_id",
-                ROBLOX_CLIENT_ID
+        const resultadoDiscord =
+            await encontrarServidorDoUsuario(
+                dadosState.discordId
             );
 
-            tokenParams.append(
-                "client_secret",
-                ROBLOX_CLIENT_SECRET
+        if (!resultadoDiscord) {
+            return res.status(400).send(
+                "Você não está em nenhum servidor onde o bot esteja."
             );
+        }
 
-            tokenParams.append(
-                "grant_type",
-                "authorization_code"
-            );
+        const {
+            guild,
+            member
+        } = resultadoDiscord;
 
-            tokenParams.append(
-                "code",
-                code
-            );
+        /*
+            Buscar DataStore
+        */
 
-            tokenParams.append(
-                "code_verifier",
-                sessao.codeVerifier
-            );
-
-            const tokenResponse =
-                await axios.post(
-                    "https://apis.roblox.com/oauth/v1/token",
-                    tokenParams.toString(),
-                    {
-                        headers: {
-                            "Content-Type":
-                                "application/x-www-form-urlencoded"
-                        }
-                    }
-                );
-
-            const accessToken =
-                tokenResponse.data.access_token;
-
-            if (!accessToken) {
-
-                throw new Error(
-                    "Roblox não forneceu access_token."
-                );
-
-            }
-
-            // ==========================================
-            // USUÁRIO ROBLOX
-            // ==========================================
-
-            const userResponse =
-                await axios.get(
-                    "https://apis.roblox.com/oauth/v1/userinfo",
-                    {
-                        headers: {
-                            Authorization:
-                                `Bearer ${accessToken}`
-                        }
-                    }
-                );
-
-            const robloxUser =
-                userResponse.data;
-
-            const robloxUserId =
-                robloxUser.sub;
-
-            const robloxUsername =
-                robloxUser.preferred_username ||
-                robloxUser.nickname ||
-                robloxUser.name;
-
-            if (!robloxUserId) {
-
-                throw new Error(
-                    "Não foi possível obter o UserId Roblox."
-                );
-
-            }
-
-            console.log(
-                "[ROBLOX] ID:",
+        const dadosRoblox =
+            await buscarDadosRoblox(
                 robloxUserId
             );
 
-            console.log(
-                "[ROBLOX] Username:",
-                robloxUsername
+        if (!dadosRoblox) {
+            return res.status(404).send(
+                `
+                <h2>⚠️ Dados não encontrados</h2>
+                <p>Sua conta Roblox foi encontrada, mas não existe registro no DataStore.</p>
+                <p><b>DataStore:</b> ${ROBLOX_DATASTORE}</p>
+                <p><b>UserId:</b> ${robloxUserId}</p>
+                `
             );
+        }
 
-            // ==========================================
-            // ENCONTRAR SERVIDOR AUTOMATICAMENTE
-            // ==========================================
+        /*
+            Obter patente
+        */
 
-            const resultadoServidor =
-                await encontrarServidorDoUsuario(
-                    sessao.discordId
-                );
+        const patente =
+            obterPatente(dadosRoblox);
 
-            if (!resultadoServidor) {
+        const divisao =
+            obterDivisao(dadosRoblox);
 
-                throw new Error(
-                    "Não encontrei você em nenhum servidor onde o bot está."
-                );
+        const cargoDivisao =
+            obterCargoDivisao(dadosRoblox);
 
-            }
+        console.log("");
+        console.log(
+            "[DADOS ROBLOX]"
+        );
 
-            const guild =
-                resultadoServidor.guild;
+        console.log(
+            "Nome:",
+            robloxUsername
+        );
 
-            const member =
-                resultadoServidor.member;
+        console.log(
+            "UserId:",
+            robloxUserId
+        );
 
-            console.log(
-                "[DISCORD] Servidor encontrado:",
-                guild.name
-            );
+        console.log(
+            "Patente:",
+            patente
+        );
 
-            console.log(
-                "[DISCORD] Membro encontrado:",
-                member.user.tag
-            );
+        console.log(
+            "Divisão:",
+            divisao
+        );
 
-            // ==========================================
-            // DATASTORE
-            // ==========================================
+        console.log(
+            "Cargo:",
+            cargoDivisao
+        );
 
-            const dados =
-                await buscarDadosRoblox(
-                    robloxUserId
-                );
+        /*
+            ALTERAR NICKNAME
 
-            if (!dados) {
+            Exemplo:
 
-                return res.send(`
-                    <html>
+            [CV]Joao123
+            [AAO]Joao123
+            [GDE]Joao123
+        */
 
-                    <body style="
-                        background:#111;
-                        color:white;
-                        font-family:Arial;
-                        text-align:center;
-                        padding:50px;
-                    ">
-
-                        <h1>⚠️ Dados não encontrados</h1>
-
-                        <p>
-                            Sua conta Roblox foi encontrada,
-                            mas não existe registro no DataStore.
-                        </p>
-
-                        <p>
-                            DataStore:
-                            <b>${ROBLOX_DATASTORE}</b>
-                        </p>
-
-                        <p>
-                            UserId:
-                            <b>${robloxUserId}</b>
-                        </p>
-
-                    </body>
-
-                    </html>
-                `);
-
-            }
-
-            // ==========================================
-            // DADOS
-            // ==========================================
-
-            const patente =
-                obterPatente(
-                    dados
-                );
-
-            const divisao =
-                obterDivisao(
-                    dados
-                );
-
-            const cargoDivisao =
-                obterCargoDivisao(
-                    dados
-                );
-
-            console.log(
-                "[DATASTORE] Patente:",
+        const nicknameAlterado =
+            await alterarNickname(
+                guild,
+                member,
+                robloxUsername,
                 patente
             );
 
-            console.log(
-                "[DATASTORE] Divisão:",
-                divisao
+        /*
+            Aplicar patente
+        */
+
+        const patenteAplicada =
+            await aplicarPatente(
+                guild,
+                member,
+                patente
             );
 
-            console.log(
-                "[DATASTORE] Cargo:",
-                cargoDivisao
+        /*
+            Remover Não verificado
+        */
+
+        const cargoNaoVerificado =
+            guild.roles.cache.find(
+                role =>
+                    normalizarTexto(role.name) ===
+                    normalizarTexto("Não verificado")
             );
 
-            // ==========================================
-            // NICKNAME
-            // ==========================================
-
+        if (cargoNaoVerificado) {
             try {
-
-                await alterarNickname(
-                    guild,
-                    member,
-                    robloxUsername
-                );
-
-                console.log(
-                    "[DISCORD] Nickname alterado."
-                );
-
+                if (
+                    member.roles.cache.has(
+                        cargoNaoVerificado.id
+                    )
+                ) {
+                    await member.roles.remove(
+                        cargoNaoVerificado,
+                        "Conta Roblox verificada"
+                    );
+                }
             } catch (erro) {
-
-                console.error(
-                    "[DISCORD] Nickname:",
+                console.log(
+                    "[VERIFICAÇÃO] Não consegui remover Não verificado:",
                     erro.message
                 );
-
-                return res.send(`
-                    <html>
-
-                    <body style="
-                        background:#111;
-                        color:white;
-                        font-family:Arial;
-                        text-align:center;
-                        padding:50px;
-                    ">
-
-                        <h1>
-                            ❌ Erro ao concluir a verificação
-                        </h1>
-
-                        <p>
-                            Discord recusou a alteração do apelido.
-                        </p>
-
-                        <p>
-                            <b>
-                                ${erro.message}
-                            </b>
-                        </p>
-
-                    </body>
-
-                    </html>
-                `);
-
             }
-
-            // ==========================================
-            // REMOVER NÃO VERIFICADO
-            // ==========================================
-
-            await removerNaoVerificado(
-                guild,
-                member
-            );
-
-            // ==========================================
-            // APLICAR PATENTE
-            // ==========================================
-
-            const resultadoCargo =
-                await aplicarPatente(
-                    guild,
-                    member,
-                    patente
-                );
-
-            // ==========================================
-            // RESULTADO
-            // ==========================================
-
-            return res.send(`
-                <html>
-
-                <head>
-
-                    <meta charset="UTF-8">
-
-                    <title>
-                        EB - Verificação concluída
-                    </title>
-
-                </head>
-
-                <body style="
-                    background:#111;
-                    color:white;
-                    font-family:Arial;
-                    text-align:center;
-                    padding:50px;
-                ">
-
-                    <h1>
-                        ✅ Verificação concluída!
-                    </h1>
-
-                    <h2>
-                        ${robloxUsername}
-                    </h2>
-
-                    <p>
-                        ID Roblox:
-                        <b>${robloxUserId}</b>
-                    </p>
-
-                    <p>
-                        Patente:
-                        <b>${patente}</b>
-                    </p>
-
-                    <p>
-                        Divisão:
-                        <b>${divisao}</b>
-                    </p>
-
-                    ${
-                        cargoDivisao
-                            ? `
-                                <p>
-                                    Cargo:
-                                    <b>${cargoDivisao}</b>
-                                </p>
-                            `
-                            : ""
-                    }
-
-                    <p>
-                        ${
-                            resultadoCargo.sucesso
-                                ? "✅"
-                                : "⚠️"
-                        }
-
-                        ${resultadoCargo.mensagem}
-                    </p>
-
-                    <p>
-                        Agora você pode voltar para o Discord.
-                    </p>
-
-                </body>
-
-                </html>
-            `);
-
-        } catch (erro) {
-
-            console.error(
-                "[CALLBACK] ERRO:",
-                erro.response?.data ||
-                erro.message ||
-                erro
-            );
-
-            return res.status(500).send(`
-                <html>
-
-                <body style="
-                    background:#111;
-                    color:white;
-                    font-family:Arial;
-                    text-align:center;
-                    padding:50px;
-                ">
-
-                    <h1>
-                        ❌ Erro ao concluir a verificação
-                    </h1>
-
-                    <p>
-                        ${erro.message}
-                    </p>
-
-                </body>
-
-                </html>
-            `);
-
         }
 
+        /*
+            Resultado
+        */
+
+        let resultado = `
+            <h1>✅ Verificação concluída!</h1>
+
+            <p><b>Roblox:</b> ${robloxUsername}</p>
+
+            <p><b>Patente:</b> ${patente}</p>
+
+            <p><b>Nickname:</b> [${SIGLAS_PATENTES[patente] || "CV"}]${robloxUsername}</p>
+
+            <p><b>Divisão:</b> ${divisao}</p>
+        `;
+
+        if (!nicknameAlterado) {
+            resultado += `
+                <p>⚠️ O nickname não pôde ser alterado pelo bot.</p>
+            `;
+        }
+
+        if (!patenteAplicada) {
+            resultado += `
+                <p>⚠️ O cargo da patente não pôde ser aplicado.</p>
+            `;
+        }
+
+        resultado += `
+            <p>Você já pode voltar para o Discord.</p>
+        `;
+
+        res.send(resultado);
+
+    } catch (erro) {
+        console.log("");
+        console.log(
+            "[CALLBACK] ERRO:"
+        );
+
+        console.log(
+            erro.response?.data ||
+            erro.message
+        );
+
+        res.status(500).send(
+            `
+            <h2>❌ Erro ao concluir a verificação.</h2>
+            <p>${erro.response?.data?.message || erro.message}</p>
+            `
+        );
     }
-);
+});
 
-// ======================================================
-// CLIENT DISCORD
-// ======================================================
-
-const client =
-    new Client({
-
-        intents: [
-
-            GatewayIntentBits.Guilds,
-
-            GatewayIntentBits.GuildMembers
-
-        ]
-
-    });
-
-// ======================================================
-// COMANDOS
-// ======================================================
+/* =========================================================
+   PAINEL DE VERIFICAÇÃO
+========================================================= */
 
 const comandos = [
 
     new SlashCommandBuilder()
         .setName("painelverificar")
         .setDescription(
-            "Abre o painel para vincular o Roblox"
+            "Envia o painel para vincular sua conta Roblox."
         ),
 
     new SlashCommandBuilder()
         .setName("tiracargo")
         .setDescription(
-            "Remove um cargo de um membro"
+            "Remove um cargo de um usuário. Uso exclusivo CGEX."
         )
-
-        .addUserOption(
-            option =>
-                option
-                    .setName("usuario")
-                    .setDescription(
-                        "Usuário"
-                    )
-                    .setRequired(true)
+        .addUserOption(option =>
+            option
+                .setName("usuario")
+                .setDescription(
+                    "Usuário que terá o cargo removido."
+                )
+                .setRequired(true)
         )
-
-        .addStringOption(
-            option =>
-                option
-                    .setName("cargo")
-                    .setDescription(
-                        "Nome exato do cargo"
-                    )
-                    .setRequired(true)
+        .addRoleOption(option =>
+            option
+                .setName("cargo")
+                .setDescription(
+                    "Cargo que será removido."
+                )
+                .setRequired(true)
         )
+];
 
-].map(
-    command =>
-        command.toJSON()
+comandos.forEach(
+    comando => comando.toJSON()
 );
 
-// ======================================================
-// CGEX
-// ======================================================
+/* =========================================================
+   BOT ONLINE
+========================================================= */
 
-function isCGEX(member) {
+client.once("ready", async () => {
 
-    return member.roles.cache.some(
-        role =>
-            normalizar(role.name) ===
-            normalizar("CGEX")
+    console.log("");
+    console.log("==============================");
+    console.log("      EB DISCORD ONLINE");
+    console.log("==============================");
+
+    console.log(
+        "Bot:",
+        client.user.tag
     );
 
-}
+    console.log(
+        "ID:",
+        client.user.id
+    );
 
-// ======================================================
-// BOT ONLINE
-// ======================================================
+    /*
+        Registrar comandos globalmente.
 
-client.once(
-    "ready",
-    async () => {
+        IMPORTANTE:
+        Não usamos DISCORD_CLIENT_ID.
+        Pegamos o ID diretamente do bot.
+    */
 
-        console.log(
-            `🤖 Bot online como ${client.user.tag}`
-        );
+    try {
 
-        // ==========================================
-        // USAR O ID REAL DO BOT
-        // NÃO DEPENDE DE DISCORD_CLIENT_ID
-        // ==========================================
+        const rest =
+            new REST({
+                version: "10"
+            }).setToken(
+                DISCORD_TOKEN
+            );
 
         const applicationId =
             client.user.id;
 
-        console.log(
-            "[DISCORD] Application ID:",
-            applicationId
+        await rest.put(
+            Routes.applicationCommands(
+                applicationId
+            ),
+            {
+                body: comandos.map(
+                    comando => comando.toJSON()
+                )
+            }
         );
+
+        console.log(
+            "Comandos registrados globalmente."
+        );
+
+    } catch (erro) {
+
+        console.log(
+            "Erro ao registrar comandos:"
+        );
+
+        console.log(
+            erro
+        );
+    }
+});
+
+/* =========================================================
+   INTERAÇÕES
+========================================================= */
+
+client.on(
+    "interactionCreate",
+    async interaction => {
 
         try {
 
-            const rest =
-                new REST({
-                    version: "10"
-                }).setToken(
-                    DISCORD_TOKEN
-                );
+            /*
+                PAINEL VERIFICAR
+            */
 
-            await rest.put(
+            if (
+                interaction.isChatInputCommand() &&
+                interaction.commandName ===
+                    "painelverificar"
+            ) {
 
-                Routes.applicationCommands(
-                    applicationId
-                ),
+                const embed =
+                    new EmbedBuilder()
+                        .setTitle(
+                            "🇧🇷 Verificação EB"
+                        )
+                        .setDescription(
+                            [
+                                "Para acessar o servidor,",
+                                "você precisa vincular sua",
+                                "conta Roblox.",
+                                "",
+                                "Clique no botão abaixo",
+                                "para iniciar a verificação."
+                            ].join("\n")
+                        );
 
-                {
-                    body: comandos
+                const botao =
+                    new ButtonBuilder()
+                        .setCustomId(
+                            "vincular_roblox"
+                        )
+                        .setLabel(
+                            "Vincular Roblox"
+                        )
+                        .setStyle(
+                            ButtonStyle.Primary
+                        );
+
+                const linha =
+                    new ActionRowBuilder()
+                        .addComponents(
+                            botao
+                        );
+
+                await interaction.reply({
+                    embeds: [embed],
+                    components: [linha]
+                });
+
+                return;
+            }
+
+            /*
+                BOTÃO VINCULAR ROBLOX
+            */
+
+            if (
+                interaction.isButton() &&
+                interaction.customId ===
+                    "vincular_roblox"
+            ) {
+
+                const url =
+                    `${ROBLOX_REDIRECT_URI
+                        .replace(
+                            "/callback",
+                            "/auth"
+                        )}` +
+                    `?discord=${interaction.user.id}`;
+
+                await interaction.reply({
+                    content:
+                        "🔗 Clique abaixo para vincular sua conta Roblox:\n\n" +
+                        url,
+                    ephemeral: true
+                });
+
+                return;
+            }
+
+            /*
+                TIRAR CARGO
+            */
+
+            if (
+                interaction.isChatInputCommand() &&
+                interaction.commandName ===
+                    "tiracargo"
+            ) {
+
+                /*
+                    Verifica se o usuário possui
+                    o cargo CGEX
+                */
+
+                const cargoCGEX =
+                    interaction.guild.roles.cache.find(
+                        role =>
+                            normalizarTexto(
+                                role.name
+                            ) ===
+                            normalizarTexto(
+                                "CGEX"
+                            )
+                    );
+
+                if (
+                    !cargoCGEX ||
+                    !interaction.member.roles.cache.has(
+                        cargoCGEX.id
+                    )
+                ) {
+                    await interaction.reply({
+                        content:
+                            "❌ Apenas membros da CGEX podem usar este comando.",
+                        ephemeral: true
+                    });
+
+                    return;
                 }
 
-            );
+                const usuario =
+                    interaction.options.getMember(
+                        "usuario"
+                    );
 
-            console.log(
-                "✅ Comandos globais registrados."
-            );
+                const cargo =
+                    interaction.options.getRole(
+                        "cargo"
+                    );
+
+                if (!usuario || !cargo) {
+                    await interaction.reply({
+                        content:
+                            "❌ Usuário ou cargo inválido.",
+                        ephemeral: true
+                    });
+
+                    return;
+                }
+
+                try {
+
+                    await usuario.roles.remove(
+                        cargo,
+                        `Cargo removido por ${interaction.user.tag}`
+                    );
+
+                    await interaction.reply({
+                        content:
+                            `✅ O cargo **${cargo.name}** foi removido de ${usuario}.`,
+                        ephemeral: true
+                    });
+
+                } catch (erro) {
+
+                    console.log(
+                        "[TIRACARGO]",
+                        erro.message
+                    );
+
+                    await interaction.reply({
+                        content:
+                            "❌ Não consegui remover esse cargo. Verifique a hierarquia do bot.",
+                        ephemeral: true
+                    });
+                }
+
+                return;
+            }
 
         } catch (erro) {
 
-            console.error(
-                "❌ Erro ao registrar comandos:",
-                erro
+            console.log(
+                "[INTERACTION] Erro:",
+                erro.message
             );
 
-        }
+            try {
 
+                if (!interaction.replied) {
+
+                    await interaction.reply({
+                        content:
+                            "❌ Ocorreu um erro.",
+                        ephemeral: true
+                    });
+
+                }
+
+            } catch (erro2) {}
+        }
     }
 );
 
-// ======================================================
-// NOVO MEMBRO
-// ======================================================
+/* =========================================================
+   NOVO MEMBRO
+========================================================= */
 
 client.on(
     "guildMemberAdd",
@@ -1428,451 +1196,108 @@ client.on(
         try {
 
             const cargo =
-                encontrarCargo(
-                    member.guild,
-                    NOME_CARGO_NAO_VERIFICADO
+                member.guild.roles.cache.find(
+                    role =>
+                        normalizarTexto(
+                            role.name
+                        ) ===
+                        normalizarTexto(
+                            "Não verificado"
+                        )
                 );
 
             if (!cargo) {
+                console.log(
+                    "[ENTRADA] Cargo Não verificado não encontrado."
+                );
 
                 return;
-
             }
 
-            const botMember =
-                member.guild.members.me;
+            await member.roles.add(
+                cargo,
+                "Novo membro"
+            );
 
-            if (
-                botMember &&
-                cargo.position <
-                botMember.roles.highest.position
-            ) {
-
-                await member.roles.add(
-                    cargo,
-                    "Novo membro aguardando verificação"
-                );
-
-                console.log(
-                    `[ENTRADA] ${member.user.tag} recebeu Não verificado.`
-                );
-
-            }
+            console.log(
+                "[ENTRADA] Não verificado aplicado:",
+                member.user.tag
+            );
 
         } catch (erro) {
 
-            console.error(
+            console.log(
                 "[ENTRADA] Erro:",
-                erro
+                erro.message
             );
-
         }
-
     }
 );
 
-// ======================================================
-// INTERAÇÕES
-// ======================================================
-
-client.on(
-    "interactionCreate",
-    async interaction => {
-
-        try {
-
-            // ==========================================
-            // BOTÃO VINCULAR ROBLOX
-            // ==========================================
-
-            if (
-                interaction.isButton() &&
-                interaction.customId ===
-                "vincular_roblox"
-            ) {
-
-                const url =
-                    `${ROBLOX_REDIRECT_URI.replace(
-                        "/callback",
-                        "/auth"
-                    )}?discord=${interaction.user.id}`;
-
-                return interaction.reply({
-
-                    content:
-                        "🔗 Clique abaixo para vincular sua conta Roblox.",
-
-                    components: [
-
-                        new ActionRowBuilder()
-                            .addComponents(
-
-                                new ButtonBuilder()
-
-                                    .setLabel(
-                                        "Vincular Roblox"
-                                    )
-
-                                    .setStyle(
-                                        ButtonStyle.Link
-                                    )
-
-                                    .setURL(
-                                        url
-                                    )
-
-                            )
-
-                    ],
-
-                    ephemeral: true
-
-                });
-
-            }
-
-            // ==========================================
-            // PAINEL VERIFICAR
-            // ==========================================
-
-            if (
-                interaction.isChatInputCommand() &&
-                interaction.commandName ===
-                "painelverificar"
-            ) {
-
-                const embed =
-                    new EmbedBuilder()
-
-                        .setTitle(
-                            "🇧🇷 Verificação EB"
-                        )
-
-                        .setDescription(
-                            "Clique no botão abaixo para vincular sua conta Roblox ao Discord.\n\n" +
-
-                            "Após a autorização, seu nickname será alterado para o nome do Roblox e sua patente será aplicada automaticamente."
-                        );
-
-                const row =
-                    new ActionRowBuilder()
-                        .addComponents(
-
-                            new ButtonBuilder()
-
-                                .setCustomId(
-                                    "vincular_roblox"
-                                )
-
-                                .setLabel(
-                                    "Vincular Roblox"
-                                )
-
-                                .setEmoji(
-                                    "🔗"
-                                )
-
-                                .setStyle(
-                                    ButtonStyle.Primary
-                                )
-
-                        );
-
-                return interaction.reply({
-
-                    embeds: [
-                        embed
-                    ],
-
-                    components: [
-                        row
-                    ]
-
-                });
-
-            }
-
-            // ==========================================
-            // TIRA CARGO
-            // ==========================================
-
-            if (
-                interaction.isChatInputCommand() &&
-                interaction.commandName ===
-                "tiracargo"
-            ) {
-
-                const alvo =
-                    interaction.options.getMember(
-                        "usuario"
-                    );
-
-                const nomeCargo =
-                    interaction.options.getString(
-                        "cargo"
-                    );
-
-                if (!alvo) {
-
-                    return interaction.reply({
-
-                        content:
-                            "❌ Usuário não encontrado.",
-
-                        ephemeral: true
-
-                    });
-
-                }
-
-                if (
-                    !isCGEX(
-                        interaction.member
-                    )
-                ) {
-
-                    return interaction.reply({
-
-                        content:
-                            "❌ Apenas CGEX pode retirar cargos.",
-
-                        ephemeral: true
-
-                    });
-
-                }
-
-                const cargo =
-                    encontrarCargo(
-                        interaction.guild,
-                        nomeCargo
-                    );
-
-                if (!cargo) {
-
-                    return interaction.reply({
-
-                        content:
-                            `❌ O cargo **${nomeCargo}** não existe.`,
-
-                        ephemeral: true
-
-                    });
-
-                }
-
-                const botMember =
-                    interaction.guild.members.me;
-
-                if (
-                    !botMember
-                ) {
-
-                    return interaction.reply({
-
-                        content:
-                            "❌ Não consegui localizar o bot.",
-
-                        ephemeral: true
-
-                    });
-
-                }
-
-                if (
-                    cargo.position >=
-                    botMember.roles.highest.position
-                ) {
-
-                    return interaction.reply({
-
-                        content:
-                            "❌ Meu cargo precisa estar acima do cargo que será retirado.",
-
-                        ephemeral: true
-
-                    });
-
-                }
-
-                try {
-
-                    await alvo.roles.remove(
-                        cargo,
-                        `Cargo retirado por ${interaction.user.tag}`
-                    );
-
-                    return interaction.reply({
-
-                        content:
-                            `✅ Cargo **${cargo.name}** retirado de ${alvo}.`
-
-                    });
-
-                } catch (erro) {
-
-                    console.error(
-                        "[TIRACARGO]",
-                        erro
-                    );
-
-                    return interaction.reply({
-
-                        content:
-                            "❌ Não consegui retirar o cargo.",
-
-                        ephemeral: true
-
-                    });
-
-                }
-
-            }
-
-        } catch (erro) {
-
-            console.error(
-                "[INTERACTION]",
-                erro
-            );
-
-            if (
-                !interaction.replied &&
-                !interaction.deferred
-            ) {
-
-                await interaction.reply({
-
-                    content:
-                        "❌ Ocorreu um erro ao executar o comando.",
-
-                    ephemeral: true
-
-                });
-
-            }
-
-        }
-
-    }
-);
-
-// ======================================================
-// LIMPEZA OAUTH
-// ======================================================
-
-setInterval(
-    () => {
-
-        const agora =
-            Date.now();
-
-        for (
-            const [
-                state,
-                sessao
-            ]
-            of sessoesOAuth.entries()
+/* =========================================================
+   LIMPEZA DE STATES
+========================================================= */
+
+setInterval(() => {
+
+    const agora = Date.now();
+
+    for (
+        const [
+            state,
+            dados
+        ] of estadosOAuth
+    ) {
+
+        if (
+            agora - dados.criadoEm >
+            10 * 60 * 1000
         ) {
 
-            if (
-                agora -
-                sessao.criadoEm >
-                10 * 60 * 1000
-            ) {
-
-                sessoesOAuth.delete(
-                    state
-                );
-
-            }
-
+            estadosOAuth.delete(
+                state
+            );
         }
+    }
 
-    },
-    60 * 1000
-);
+}, 5 * 60 * 1000);
 
-// ======================================================
-// CONFIGURAÇÕES
-// ======================================================
+/* =========================================================
+   SERVIDOR WEB
+========================================================= */
 
-console.log(
-    "=========================================="
-);
+app.get("/", (req, res) => {
 
-console.log(
-    "🇧🇷 EB DISCORD"
-);
+    res.send(
+        "🇧🇷 EB Discord Bot Online!"
+    );
 
-console.log(
-    "=========================================="
-);
-
-console.log(
-    "Universe ID:",
-    ROBLOX_UNIVERSE_ID
-);
-
-console.log(
-    "DataStore:",
-    ROBLOX_DATASTORE
-);
-
-console.log(
-    "Redirect URI:",
-    ROBLOX_REDIRECT_URI
-);
-
-console.log(
-    "DataStore API Key:",
-
-    ROBLOX_API_KEY
-        ? "CONFIGURADA"
-        : "NÃO CONFIGURADA"
-);
-
-console.log(
-    "Discord Token:",
-
-    DISCORD_TOKEN
-        ? "CONFIGURADO"
-        : "NÃO CONFIGURADO"
-);
-
-// ======================================================
-// SERVIDOR
-// ======================================================
+});
 
 app.listen(
     PORT,
     () => {
 
         console.log(
-            `🌐 Servidor HTTP rodando na porta ${PORT}`
+            `Servidor web rodando na porta ${PORT}`
         );
 
     }
 );
 
-// ======================================================
-// LOGIN
-// ======================================================
+/* =========================================================
+   LOGIN DISCORD
+========================================================= */
 
 if (!DISCORD_TOKEN) {
 
-    console.error(
+    console.log(
         "❌ DISCORD_TOKEN não configurado."
     );
 
 } else {
 
-    console.log(
-        "🔌 Tentando conectar ao Discord..."
-    );
-
     client.login(
         DISCORD_TOKEN
     );
-
 }
