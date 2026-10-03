@@ -41,6 +41,17 @@ const ROBLOX_DATASTORE = "EB_SISTEMA_V1";
 const PORT = process.env.PORT || 10000;
 
 /* =========================================================
+   MONITORAMENTO
+========================================================= */
+
+const inicioBot = Date.now();
+
+let ultimoReady = null;
+let ultimaDesconexao = null;
+let ultimaReconexao = null;
+let contadorReconexoes = 0;
+
+/* =========================================================
    CLIENT DISCORD
 ========================================================= */
 
@@ -83,7 +94,7 @@ const PATENTES = [
 ];
 
 /* =========================================================
-   SIGLAS DAS PATENTES
+   SIGLAS
 ========================================================= */
 
 const SIGLAS_PATENTES = {
@@ -114,10 +125,44 @@ const SIGLAS_PATENTES = {
 };
 
 /* =========================================================
+   FUNÇÕES DE MONITORAMENTO
+========================================================= */
+
+function formatarUptime(ms) {
+
+    const segundos =
+        Math.floor(ms / 1000);
+
+    const dias =
+        Math.floor(segundos / 86400);
+
+    const horas =
+        Math.floor(
+            (segundos % 86400) / 3600
+        );
+
+    const minutos =
+        Math.floor(
+            (segundos % 3600) / 60
+        );
+
+    const segundosRestantes =
+        segundos % 60;
+
+    return (
+        `${dias}d ` +
+        `${horas}h ` +
+        `${minutos}m ` +
+        `${segundosRestantes}s`
+    );
+}
+
+/* =========================================================
    NORMALIZAR TEXTO
 ========================================================= */
 
 function normalizarTexto(texto) {
+
     return String(texto || "")
         .normalize("NFD")
         .replace(/[\u0300-\u036f]/g, "")
@@ -126,7 +171,7 @@ function normalizarTexto(texto) {
 }
 
 /* =========================================================
-   PEGAR VALOR REAL DO DATASTORE
+   DATASTORE
 ========================================================= */
 
 function obterValorDataStore(dados) {
@@ -135,32 +180,18 @@ function obterValorDataStore(dados) {
         return null;
     }
 
-    /*
-        A resposta do Roblox Open Cloud normalmente
-        possui os dados dentro de "value".
-
-        Exemplo:
-
-        {
-            "path": "...",
-            "value": {
-                "Patente": "Aspirante a Oficial"
-            }
-        }
-    */
-
-    let valor = dados.value ?? dados;
-
-    /*
-        Caso o value venha como JSON em formato string,
-        tentamos transformar em objeto.
-    */
+    let valor =
+        dados.value ?? dados;
 
     if (typeof valor === "string") {
 
         try {
-            valor = JSON.parse(valor);
+
+            valor =
+                JSON.parse(valor);
+
         } catch (erro) {
+
             return valor;
         }
     }
@@ -174,9 +205,11 @@ function obterValorDataStore(dados) {
 
 function obterPatente(dados) {
 
-    const valor = obterValorDataStore(dados);
+    const valor =
+        obterValorDataStore(dados);
 
     if (!valor) {
+
         console.log(
             "[PATENTE] Nenhum dado encontrado. Usando Civil."
         );
@@ -185,15 +218,6 @@ function obterPatente(dados) {
     }
 
     if (typeof valor === "string") {
-
-        console.log(
-            "[PATENTE] Valor recebido como texto:",
-            valor
-        );
-
-        /*
-            Se o próprio valor for o nome da patente.
-        */
 
         if (PATENTES.includes(valor)) {
             return valor;
@@ -215,13 +239,9 @@ function obterPatente(dados) {
     );
 
     if (!patente) {
-        console.log(
-            "[PATENTE] Campo Patente não encontrado."
-        );
 
         console.log(
-            "[PATENTE] Dados disponíveis:",
-            JSON.stringify(valor, null, 2)
+            "[PATENTE] Campo Patente não encontrado."
         );
 
         return "Civil";
@@ -236,9 +256,14 @@ function obterPatente(dados) {
 
 function obterDivisao(dados) {
 
-    const valor = obterValorDataStore(dados);
+    const valor =
+        obterValorDataStore(dados);
 
-    if (!valor || typeof valor !== "object") {
+    if (
+        !valor ||
+        typeof valor !== "object"
+    ) {
+
         return "Civis";
     }
 
@@ -257,9 +282,14 @@ function obterDivisao(dados) {
 
 function obterCargoDivisao(dados) {
 
-    const valor = obterValorDataStore(dados);
+    const valor =
+        obterValorDataStore(dados);
 
-    if (!valor || typeof valor !== "object") {
+    if (
+        !valor ||
+        typeof valor !== "object"
+    ) {
+
         return "";
     }
 
@@ -274,7 +304,7 @@ function obterCargoDivisao(dados) {
 }
 
 /* =========================================================
-   ROBLOX DATASTORE
+   BUSCAR DATASTORE ROBLOX
 ========================================================= */
 
 async function buscarDadosRoblox(userId) {
@@ -287,23 +317,22 @@ async function buscarDadosRoblox(userId) {
             `${encodeURIComponent(ROBLOX_DATASTORE)}/entries/` +
             `${encodeURIComponent(String(userId))}`;
 
-        console.log("");
-        console.log("==============================");
-        console.log("[ROBLOX DATASTORE]");
-        console.log("UserId:", userId);
-        console.log("DataStore:", ROBLOX_DATASTORE);
-        console.log("URL:", url);
-        console.log("==============================");
+        console.log(
+            "[ROBLOX DATASTORE] UserId:",
+            userId
+        );
 
         const resposta =
             await axios.get(
                 url,
                 {
                     headers: {
-                        "x-api-key": ROBLOX_API_KEY
+                        "x-api-key":
+                            ROBLOX_API_KEY
                     },
 
-                    validateStatus: () => true
+                    validateStatus:
+                        () => true
                 }
             );
 
@@ -313,10 +342,6 @@ async function buscarDadosRoblox(userId) {
         );
 
         if (resposta.status !== 200) {
-
-            console.log(
-                "[ROBLOX DATASTORE] Resposta de erro:"
-            );
 
             console.log(
                 JSON.stringify(
@@ -346,11 +371,7 @@ async function buscarDadosRoblox(userId) {
     } catch (erro) {
 
         console.log(
-            "[ROBLOX DATASTORE] Erro:"
-        );
-
-        console.log(
-            erro.response?.data ||
+            "[ROBLOX DATASTORE] Erro:",
             erro.message
         );
 
@@ -359,10 +380,12 @@ async function buscarDadosRoblox(userId) {
 }
 
 /* =========================================================
-   ENCONTRAR SERVIDOR DO USUÁRIO
+   ENCONTRAR SERVIDOR
 ========================================================= */
 
-async function encontrarServidorDoUsuario(discordId) {
+async function encontrarServidorDoUsuario(
+    discordId
+) {
 
     for (
         const guild
@@ -384,9 +407,7 @@ async function encontrarServidorDoUsuario(discordId) {
                 };
             }
 
-        } catch (erro) {
-            // Usuário não está neste servidor.
-        }
+        } catch (erro) {}
     }
 
     return null;
@@ -409,15 +430,13 @@ async function alterarNickname(
             return false;
         }
 
-        /*
-            O dono do servidor não pode
-            ter o nickname alterado pelo bot.
-        */
-
-        if (member.id === guild.ownerId) {
+        if (
+            member.id ===
+            guild.ownerId
+        ) {
 
             console.log(
-                "[NICKNAME] Usuário é o dono do servidor."
+                "[NICKNAME] Usuário é dono do servidor."
             );
 
             return false;
@@ -427,17 +446,8 @@ async function alterarNickname(
             guild.members.me;
 
         if (!botMember) {
-
-            console.log(
-                "[NICKNAME] Bot não encontrado."
-            );
-
             return false;
         }
-
-        /*
-            Permissão
-        */
 
         if (
             !botMember.permissions.has(
@@ -452,38 +462,21 @@ async function alterarNickname(
             return false;
         }
 
-        /*
-            Hierarquia
-        */
-
         if (
             member.roles.highest.position >=
             botMember.roles.highest.position
         ) {
 
             console.log(
-                "[NICKNAME] Usuário possui cargo acima ou igual ao bot."
+                "[NICKNAME] Hierarquia impede alteração."
             );
 
             return false;
         }
 
-        /*
-            Descobrir sigla
-        */
-
         const sigla =
             SIGLAS_PATENTES[patente] ||
             "CV";
-
-        /*
-            FORMATO:
-
-            [CV]Joao123
-            [REC]Joao123
-            [AAO]Joao123
-            [GDE]Joao123
-        */
 
         const novoNickname =
             `[${sigla}]${robloxUsername}`;
@@ -494,7 +487,7 @@ async function alterarNickname(
         );
 
         console.log(
-            "[NICKNAME] Alterado para:",
+            "[NICKNAME] Alterado:",
             novoNickname
         );
 
@@ -523,11 +516,7 @@ async function aplicarPatente(
 
     try {
 
-        if (!guild || !member) {
-            return false;
-        }
-
-        const nomePatenteNormalizado =
+        const nomeNormalizado =
             normalizarTexto(
                 patente
             );
@@ -537,8 +526,7 @@ async function aplicarPatente(
                 role =>
                     normalizarTexto(
                         role.name
-                    ) ===
-                    nomePatenteNormalizado
+                    ) === nomeNormalizado
             );
 
         if (!cargoPatente) {
@@ -558,26 +546,17 @@ async function aplicarPatente(
             return false;
         }
 
-        /*
-            Hierarquia
-        */
-
         if (
             cargoPatente.position >=
             botMember.roles.highest.position
         ) {
 
             console.log(
-                "[CARGO] Cargo acima do bot:",
-                cargoPatente.name
+                "[CARGO] Cargo acima do bot."
             );
 
             return false;
         }
-
-        /*
-            Remover cargos antigos de patente
-        */
 
         for (
             const cargo
@@ -601,41 +580,33 @@ async function aplicarPatente(
                 ehPatente &&
                 member.roles.cache.has(
                     cargo.id
-                )
+                ) &&
+                cargo.id !==
+                    cargoPatente.id
             ) {
 
                 if (
-                    cargo.id !==
-                    cargoPatente.id
+                    cargo.position <
+                    botMember.roles.highest.position
                 ) {
 
-                    if (
-                        cargo.position <
-                        botMember.roles.highest.position
-                    ) {
+                    try {
 
-                        try {
+                        await member.roles.remove(
+                            cargo,
+                            "Atualização da patente Roblox"
+                        );
 
-                            await member.roles.remove(
-                                cargo,
-                                "Atualização da patente Roblox"
-                            );
+                    } catch (erro) {
 
-                        } catch (erro) {
-
-                            console.log(
-                                "[CARGO] Não consegui remover:",
-                                cargo.name
-                            );
-                        }
+                        console.log(
+                            "[CARGO] Erro removendo:",
+                            cargo.name
+                        );
                     }
                 }
             }
         }
-
-        /*
-            Adicionar patente correta
-        */
 
         if (
             !member.roles.cache.has(
@@ -674,20 +645,12 @@ async function aplicarPatente(
 const estadosOAuth =
     new Map();
 
-/* =========================================================
-   STATE
-========================================================= */
-
 function gerarState() {
 
     return crypto
         .randomBytes(32)
         .toString("hex");
 }
-
-/* =========================================================
-   PKCE
-========================================================= */
 
 function gerarCodeVerifier() {
 
@@ -744,7 +707,8 @@ app.get(
                 {
                     discordId,
                     codeVerifier,
-                    criadoEm: Date.now()
+                    criadoEm:
+                        Date.now()
                 }
             );
 
@@ -841,17 +805,13 @@ app.get(
                 return res
                     .status(400)
                     .send(
-                        "Sessão de autenticação inválida ou expirada."
+                        "Sessão inválida ou expirada."
                     );
             }
 
             estadosOAuth.delete(
                 state
             );
-
-            /* =========================================
-               TROCAR CODE PELO TOKEN
-            ========================================= */
 
             const tokenResposta =
                 await axios.post(
@@ -900,10 +860,6 @@ app.get(
                     );
             }
 
-            /* =========================================
-               BUSCAR USUÁRIO ROBLOX
-            ========================================= */
-
             const userResposta =
                 await axios.get(
                     "https://apis.roblox.com/oauth/v1/userinfo",
@@ -926,21 +882,6 @@ app.get(
             const robloxUserId =
                 robloxUser.sub;
 
-            console.log("");
-            console.log(
-                "[ROBLOX OAUTH]"
-            );
-
-            console.log(
-                "Nome:",
-                robloxUsername
-            );
-
-            console.log(
-                "UserId:",
-                robloxUserId
-            );
-
             if (
                 !robloxUsername ||
                 !robloxUserId
@@ -953,9 +894,11 @@ app.get(
                     );
             }
 
-            /* =========================================
-               ENCONTRAR SERVIDOR
-            ========================================= */
+            console.log(
+                "[ROBLOX OAUTH]",
+                robloxUsername,
+                robloxUserId
+            );
 
             const resultadoDiscord =
                 await encontrarServidorDoUsuario(
@@ -976,10 +919,6 @@ app.get(
                 member
             } = resultadoDiscord;
 
-            /* =========================================
-               BUSCAR DATASTORE
-            ========================================= */
-
             const dadosRoblox =
                 await buscarDadosRoblox(
                     robloxUserId
@@ -992,32 +931,20 @@ app.get(
                     .send(
                         `
                         <h2>⚠️ Dados não encontrados</h2>
-
                         <p>Sua conta Roblox foi encontrada, mas não existe registro no DataStore.</p>
-
                         <p><b>DataStore:</b> ${ROBLOX_DATASTORE}</p>
-
                         <p><b>UserId:</b> ${robloxUserId}</p>
                         `
                     );
             }
-
-            /* =========================================
-               LER DADOS
-            ========================================= */
 
             const valorDataStore =
                 obterValorDataStore(
                     dadosRoblox
                 );
 
-            console.log("");
             console.log(
-                "=============================="
-            );
-
-            console.log(
-                "[DADOS DO DATASTORE]"
+                "[DADOS DATASTORE]"
             );
 
             console.log(
@@ -1026,10 +953,6 @@ app.get(
                     null,
                     2
                 )
-            );
-
-            console.log(
-                "=============================="
             );
 
             const patente =
@@ -1047,7 +970,10 @@ app.get(
                     dadosRoblox
                 );
 
-            console.log("");
+            const sigla =
+                SIGLAS_PATENTES[patente] ||
+                "CV";
+
             console.log(
                 "[DADOS ROBLOX]"
             );
@@ -1077,22 +1003,10 @@ app.get(
                 cargoDivisao
             );
 
-            /* =========================================
-               SIGLA
-            ========================================= */
-
-            const sigla =
-                SIGLAS_PATENTES[patente] ||
-                "CV";
-
             console.log(
                 "Sigla:",
                 sigla
             );
-
-            /* =========================================
-               ALTERAR NICKNAME
-            ========================================= */
 
             const nicknameAlterado =
                 await alterarNickname(
@@ -1102,20 +1016,12 @@ app.get(
                     patente
                 );
 
-            /* =========================================
-               APLICAR PATENTE
-            ========================================= */
-
             const patenteAplicada =
                 await aplicarPatente(
                     guild,
                     member,
                     patente
                 );
-
-            /* =========================================
-               REMOVER NÃO VERIFICADO
-            ========================================= */
 
             const cargoNaoVerificado =
                 guild.roles.cache.find(
@@ -1147,29 +1053,19 @@ app.get(
                 } catch (erro) {
 
                     console.log(
-                        "[VERIFICAÇÃO] Não consegui remover Não verificado:",
+                        "[VERIFICAÇÃO] Erro:",
                         erro.message
                     );
                 }
             }
 
-            /* =========================================
-               RESULTADO
-            ========================================= */
-
             let resultado = `
                 <h1>✅ Verificação concluída!</h1>
-
                 <p><b>Roblox:</b> ${robloxUsername}</p>
-
                 <p><b>UserId:</b> ${robloxUserId}</p>
-
                 <p><b>Patente:</b> ${patente}</p>
-
                 <p><b>Sigla:</b> ${sigla}</p>
-
                 <p><b>Nickname:</b> [${sigla}]${robloxUsername}</p>
-
                 <p><b>Divisão:</b> ${divisao}</p>
             `;
 
@@ -1203,12 +1099,8 @@ app.get(
 
         } catch (erro) {
 
-            console.log("");
             console.log(
-                "[CALLBACK] ERRO:"
-            );
-
-            console.log(
+                "[CALLBACK] ERRO:",
                 erro.response?.data ||
                 erro.message
             );
@@ -1218,13 +1110,10 @@ app.get(
                 .send(
                     `
                     <h2>❌ Erro ao concluir a verificação.</h2>
-
-                    <p>
-                        ${
-                            erro.response?.data?.message ||
-                            erro.message
-                        }
-                    </p>
+                    <p>${
+                        erro.response?.data?.message ||
+                        erro.message
+                    }</p>
                     `
                 );
         }
@@ -1281,12 +1170,15 @@ const comandos = [
 ];
 
 /* =========================================================
-   BOT READY
+   READY
 ========================================================= */
 
 client.once(
     "ready",
     async () => {
+
+        ultimoReady =
+            new Date().toISOString();
 
         console.log("");
         console.log(
@@ -1311,6 +1203,14 @@ client.once(
             client.user.id
         );
 
+        console.log(
+            "Uptime:",
+            formatarUptime(
+                Date.now() -
+                inicioBot
+            )
+        );
+
         try {
 
             const rest =
@@ -1319,11 +1219,6 @@ client.once(
                 }).setToken(
                     DISCORD_TOKEN
                 );
-
-            /*
-                Pegamos o ID do aplicativo
-                diretamente do bot.
-            */
 
             const applicationId =
                 client.user.id;
@@ -1361,6 +1256,120 @@ client.once(
 );
 
 /* =========================================================
+   MONITORAMENTO DISCORD
+========================================================= */
+
+client.on(
+    "error",
+    erro => {
+
+        console.log("");
+        console.log(
+            "========== DISCORD ERROR =========="
+        );
+
+        console.log(
+            erro
+        );
+    }
+);
+
+client.on(
+    "warn",
+    aviso => {
+
+        console.log(
+            "[DISCORD WARN]",
+            aviso
+        );
+    }
+);
+
+client.on(
+    "shardDisconnect",
+    (evento, shardId) => {
+
+        ultimaDesconexao =
+            new Date().toISOString();
+
+        console.log("");
+        console.log(
+            "================================"
+        );
+
+        console.log(
+            "⚠️ DISCORD DESCONECTADO"
+        );
+
+        console.log(
+            "Shard:",
+            shardId
+        );
+
+        console.log(
+            "Código:",
+            evento?.code
+        );
+
+        console.log(
+            "Motivo:",
+            evento?.reason
+        );
+
+        console.log(
+            "================================"
+        );
+    }
+);
+
+client.on(
+    "shardReconnecting",
+    shardId => {
+
+        contadorReconexoes++;
+
+        ultimaReconexao =
+            new Date().toISOString();
+
+        console.log("");
+        console.log(
+            "🔄 TENTANDO RECONECTAR AO DISCORD..."
+        );
+
+        console.log(
+            "Shard:",
+            shardId
+        );
+
+        console.log(
+            "Tentativa:",
+            contadorReconexoes
+        );
+    }
+);
+
+client.on(
+    "shardResume",
+    (shardId, replayedEvents) => {
+
+        console.log("");
+        console.log(
+            "✅ CONEXÃO COM DISCORD RESTAURADA"
+        );
+
+        console.log(
+            "Shard:",
+            shardId
+        );
+
+        console.log(
+            "Eventos recuperados:",
+            replayedEvents
+        );
+    }
+);
+
+/* =========================================================
    INTERAÇÕES
 ========================================================= */
 
@@ -1369,10 +1378,6 @@ client.on(
     async interaction => {
 
         try {
-
-            /* =========================================
-               PAINEL VERIFICAR
-            ========================================= */
 
             if (
                 interaction.isChatInputCommand() &&
@@ -1428,10 +1433,6 @@ client.on(
                 return;
             }
 
-            /* =========================================
-               VINCULAR ROBLOX
-            ========================================= */
-
             if (
                 interaction.isButton() &&
                 interaction.customId ===
@@ -1460,10 +1461,6 @@ client.on(
 
                 return;
             }
-
-            /* =========================================
-               TIRAR CARGO
-            ========================================= */
 
             if (
                 interaction.isChatInputCommand() &&
@@ -1677,6 +1674,98 @@ setInterval(
 );
 
 /* =========================================================
+   MONITORAMENTO PERIÓDICO
+========================================================= */
+
+setInterval(
+    () => {
+
+        const pronto =
+            client.isReady();
+
+        console.log("");
+        console.log(
+            "========== MONITOR =========="
+        );
+
+        console.log(
+            "Discord:",
+            pronto
+                ? "ONLINE"
+                : "OFFLINE"
+        );
+
+        console.log(
+            "Uptime:",
+            formatarUptime(
+                Date.now() -
+                inicioBot
+            )
+        );
+
+        console.log(
+            "Reconexões:",
+            contadorReconexoes
+        );
+
+        console.log(
+            "=============================="
+        );
+
+    },
+    5 * 60 * 1000
+);
+
+/* =========================================================
+   HEALTH CHECK
+========================================================= */
+
+app.get(
+    "/health",
+    (req, res) => {
+
+        const conectado =
+            client.isReady();
+
+        res.status(
+            conectado
+                ? 200
+                : 503
+        ).json({
+
+            status:
+                conectado
+                    ? "online"
+                    : "offline",
+
+            bot:
+                client.user
+                    ? client.user.tag
+                    : null,
+
+            discord:
+                conectado,
+
+            uptime:
+                Date.now() -
+                inicioBot,
+
+            ultimaConexao:
+                ultimoReady,
+
+            ultimaDesconexao:
+                ultimaDesconexao,
+
+            ultimaReconexao:
+                ultimaReconexao,
+
+            reconexoes:
+                contadorReconexoes
+        });
+    }
+);
+
+/* =========================================================
    SERVIDOR WEB
 ========================================================= */
 
@@ -1697,11 +1786,49 @@ app.listen(
         console.log(
             `Servidor web rodando na porta ${PORT}`
         );
+
+        console.log(
+            `Health: /health`
+        );
     }
 );
 
 /* =========================================================
-   LOGIN
+   ERROS GLOBAIS
+========================================================= */
+
+process.on(
+    "unhandledRejection",
+    erro => {
+
+        console.log("");
+        console.log(
+            "========== UNHANDLED REJECTION =========="
+        );
+
+        console.log(
+            erro
+        );
+    }
+);
+
+process.on(
+    "uncaughtException",
+    erro => {
+
+        console.log("");
+        console.log(
+            "========== UNCAUGHT EXCEPTION =========="
+        );
+
+        console.log(
+            erro
+        );
+    }
+);
+
+/* =========================================================
+   LOGIN DISCORD
 ========================================================= */
 
 if (!DISCORD_TOKEN) {
@@ -1712,7 +1839,19 @@ if (!DISCORD_TOKEN) {
 
 } else {
 
+    console.log(
+        "🔄 Conectando ao Discord..."
+    );
+
     client.login(
         DISCORD_TOKEN
+    ).catch(
+        erro => {
+
+            console.log(
+                "❌ Erro ao fazer login:",
+                erro.message
+            );
+        }
     );
 }
